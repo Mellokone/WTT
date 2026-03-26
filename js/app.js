@@ -1,5 +1,7 @@
 
-const APP_VERSION="1.678"
+const APP_VERSION="1.699"
+const DONATION_ERC20_ADDRESS="0x1E7333A8a912cA3a39Fe3699405AF523Ed2c2058"
+const DONATION_PAYPAL_EMAIL="mellok@ukr.net"
 const LANGUAGE_KEY="uiLanguageV1"
 const SUPPORTED_LANGUAGES=new Set(["uk","en"])
 const I18N={
@@ -134,7 +136,16 @@ const I18N={
   statusEncryptedSaved:"Зашифрований файл збережено",
   statusSaveFailed:"Не вдалося зберегти дані",
   statusDataLoaded:"Дані успішно завантажено",
-  statusLoadFailed:"Не вдалося завантажити файл або невірний пароль"
+  statusLoadFailed:"Не вдалося завантажити файл або невірний пароль",
+  creatorInfoLabel:"Інформація про автора",
+  creatorName:"Olexandr Skorobagatko",
+  creatorSupportMessage:"If you like my product, feel free to donate any amount.",
+  creatorCryptoLabel:"ERC-20:",
+  creatorPaypalLabel:"PayPal:",
+  creatorThanks:"THANK YOU",
+  copy:"Копіювати",
+  copied:"Скопійовано",
+  copyFailed:"Помилка копіювання"
  },
  en:{
   appTitle:"Weekly Trade Tracker",
@@ -267,7 +278,16 @@ const I18N={
   statusEncryptedSaved:"Encrypted file saved",
   statusSaveFailed:"Failed to save data",
   statusDataLoaded:"Data loaded successfully",
-  statusLoadFailed:"Failed to load file or wrong password"
+  statusLoadFailed:"Failed to load file or wrong password",
+  creatorInfoLabel:"Creator info",
+  creatorName:"Olexandr Skorobagatko",
+  creatorSupportMessage:"If you like my product, feel free to donate any amount.",
+  creatorCryptoLabel:"ERC-20:",
+  creatorPaypalLabel:"PayPal:",
+  creatorThanks:"THANK YOU",
+  copy:"Copy",
+  copied:"Copied",
+  copyFailed:"Copy failed"
  }
 }
 
@@ -928,6 +948,39 @@ async function saveEncryptedDataFile(fileName,content){
  URL.revokeObjectURL(url)
 }
 
+async function copyTextToClipboard(value){
+ const text=String(value ?? "")
+ if(!text) return false
+ try{
+  if(navigator.clipboard && window.isSecureContext){
+   await navigator.clipboard.writeText(text)
+   return true
+  }
+ }catch{}
+ try{
+  const textarea=document.createElement("textarea")
+  textarea.value=text
+  textarea.setAttribute("readonly","readonly")
+  textarea.style.position="fixed"
+  textarea.style.opacity="0"
+  textarea.style.pointerEvents="none"
+  document.body.appendChild(textarea)
+  textarea.focus()
+  textarea.select()
+  const copied=document.execCommand("copy")
+  textarea.remove()
+  return !!copied
+ }catch{
+  return false
+ }
+}
+
+async function handleDonationCopy(kind){
+ const value=kind==="paypal" ? DONATION_PAYPAL_EMAIL : DONATION_ERC20_ADDRESS
+ const copied=await copyTextToClipboard(value)
+ showStatusToast(copied ? t("copied") : t("copyFailed"))
+}
+
 function escapeHtml(value){
  return String(value)
   .replace(/&/g,"&amp;")
@@ -1119,6 +1172,7 @@ const NOTES_GROUP_COLLAPSED_KEY="notesGroupCollapsedV1"
 const FOLDER_ICON_STATE_KEY="folderIconStateV1"
 const CHART_MODE_KEY="chartModeV1"
 const UNDO_HISTORY_KEY="undoHistoryV1"
+const IMPORT_LAYOUT_ON_LOAD_KEY="importLayoutOnLoadV1"
 const WINDOW_SCALE_KEY="windowScaleV1"
 const WINDOW_SCALE_STEP=0.05
 const MIN_WINDOW_SCALE=0.5
@@ -1166,6 +1220,7 @@ let undoStack=[]
 let redoStack=[]
 let lastCommittedState=""
 let isRestoringHistory=false
+let allowImportLayoutOnLoad=localStorage.getItem(IMPORT_LAYOUT_ON_LOAD_KEY)==="1"
 let roiCurveState={
  connected:false,
  values:[],
@@ -1194,12 +1249,109 @@ function cloneData(value){
  return JSON.parse(JSON.stringify(value))
 }
 
+function setAllowImportLayoutOnLoad(value){
+ allowImportLayoutOnLoad=!!value
+ if(allowImportLayoutOnLoad){
+  localStorage.setItem(IMPORT_LAYOUT_ON_LOAD_KEY,"1")
+  return
+ }
+ localStorage.removeItem(IMPORT_LAYOUT_ON_LOAD_KEY)
+}
+
+function hasLayoutInStatePayload(state){
+ if(!state || typeof state!=="object") return false
+ const panels=state.panels
+ const hasPanels=!!panels && typeof panels==="object" && Object.keys(panels).some(key=>key!=="__meta")
+ const noteLayouts=state.notes?.layouts
+ const hasNoteLayouts=!!noteLayouts && typeof noteLayouts==="object" && Object.keys(noteLayouts).length>0
+ const workspace=state.workspace
+ const hasWorkspace=!!workspace && typeof workspace==="object" && (
+  typeof workspace.backgroundPosition==="string" ||
+  workspace.topZIndex!=null
+ )
+ return hasPanels || hasNoteLayouts || hasWorkspace
+}
+
 function normalizeLegacyNoteToHtml(value){
  const raw=String(value || "")
  if(!raw) return ""
  const hasHtmlTags=/<\/?[a-z][\s\S]*>/i.test(raw)
  if(hasHtmlTags) return raw
  return escapeHtml(raw).replace(/\r?\n/g,"<br>")
+}
+
+function getWelcomeNoteHtml(lang=currentLanguage){
+ const safeLang=lang==="en" ? "en" : "uk"
+ const message=safeLang==="en"
+  ? "Thank you for choosing my product."
+  : "Дякую, що обрали мій продукт."
+ return `<div class="welcome-note-text">${escapeHtml(message)}</div>`
+}
+
+function ensureCenteredWelcomeNotePanel({forceCreate=false}={}){
+ const welcomeHtml=getWelcomeNoteHtml()
+ if(forceCreate || notesItems.length===0){
+  notesItems=[welcomeHtml]
+  noteTitles=normalizeNotesTitles(noteTitles,1)
+  notesPanelLayouts={}
+  syncNotesPanels(1)
+ }
+ const notePanel=getNotesPanels()[0]
+ if(!notePanel) return
+ const editor=notePanel.querySelector(".notes-editor")
+ if(editor && editor.innerHTML!==welcomeHtml){
+  editor.innerHTML=welcomeHtml
+ }
+ notesItems[0]=welcomeHtml
+ noteTitles=normalizeNotesTitles(noteTitles,notesItems.length)
+ notePanel.classList.remove("panel-hidden")
+ updateNotesPanelMeta(notePanel,0)
+ rememberNotesPanelLayout(notePanel)
+ saveNotesItems()
+ saveNotesTitles()
+ saveNotesPanelLayouts()
+ refreshDraggables()
+ refreshPanelCollapsedBadges()
+}
+
+function syncWelcomeNoteLanguageIfDefault(){
+ const notePanel=getNotesPanels()[0]
+ if(!notePanel) return
+ const editor=notePanel.querySelector(".notes-editor")
+ if(!editor) return
+ const htmlUk=getWelcomeNoteHtml("uk")
+ const htmlEn=getWelcomeNoteHtml("en")
+ const currentHtml=String(editor.innerHTML || "").trim()
+ if(currentHtml!==htmlUk && currentHtml!==htmlEn) return
+ const nextHtml=getWelcomeNoteHtml()
+ if(currentHtml===nextHtml) return
+ editor.innerHTML=nextHtml
+ if(notesItems.length>0){
+  notesItems[0]=nextHtml
+  saveNotesItems()
+ }
+}
+
+function isWelcomeNotePanel(panel){
+ if(!panel?.classList?.contains("notes")) return false
+ const noteIndex=Math.max(0,Number(panel.dataset.noteIndex)||0)
+ if(noteIndex!==0) return false
+ const editor=panel.querySelector(".notes-editor")
+ if(!editor) return false
+ const html=String(editor.innerHTML || "").trim()
+ return html===getWelcomeNoteHtml("uk") || html===getWelcomeNoteHtml("en")
+}
+
+function centerPanelOnScreen(panel){
+ if(!panel) return
+ const panelWidth=panel.offsetWidth || 360
+ const panelHeight=panel.offsetHeight || 250
+ const centeredX=Math.max(20,Math.round((window.innerWidth-panelWidth)/2))
+ const centeredY=Math.max(getPanelTopSafeY(),Math.round((window.innerHeight-panelHeight)/2))
+ panel.style.left=`${centeredX}px`
+ panel.style.top=`${centeredY}px`
+ panel.dataset.expandedX=String(centeredX)
+ panel.dataset.expandedY=String(centeredY)
 }
 
 function normalizeNotesItems(items){
@@ -1468,8 +1620,11 @@ function serializeExportState(){
   },
   notes:{
    items:cloneData(state.notes?.items ?? []),
-   titles:cloneData(state.notes?.titles ?? [])
-  }
+   titles:cloneData(state.notes?.titles ?? []),
+   layouts:cloneData(state.notes?.layouts ?? {})
+  },
+  panels:cloneData(state.panels ?? {}),
+  workspace:cloneData(state.workspace ?? {})
  }
  return JSON.stringify(exportState)
 }
@@ -2252,8 +2407,8 @@ function initMarginBasicCalculator(){
 function initMarginBasicCalculatorKeyboard(){
  if(document.body.dataset.marginCalcKeyboardReady==="1") return
  document.body.dataset.marginCalcKeyboardReady="1"
- document.addEventListener("keydown",(e)=>{
-  if(isLocked || isResetConfirmOpen) return
+document.addEventListener("keydown",(e)=>{
+  if(isLocked || isResetConfirmOpen || isDonationScreenOpen) return
   if(!marginFlipped) return
   if(!marginPanel || marginPanel.classList.contains("panel-hidden") || marginPanel.classList.contains("collapsed")) return
   const target=e.target
@@ -4282,10 +4437,16 @@ function performResetTrades(){
   totalsFlipped=false
   clockFlipped=false
   topZIndex=10
+  document.body.style.backgroundPosition=""
+  localStorage.removeItem(DRAG_KEY)
   syncNotesPanels(0)
   document.querySelectorAll(PANEL_SELECTOR).forEach(panel=>{
    panel.classList.remove("panel-hidden","collapsed")
   })
+  refreshDraggables()
+  ensureCenteredWelcomeNotePanel({forceCreate:true})
+  setInitialPositions()
+  refreshPanelCollapsedBadges()
   localStorage.removeItem("notesHeightV1")
   localStorage.removeItem(NOTES_TITLES_KEY)
   localStorage.removeItem(NOTES_PANEL_LAYOUTS_KEY)
@@ -4308,8 +4469,10 @@ function performResetTrades(){
   updateTotals()
   renderTotalHistory()
   calculate()
-  savePositions()
+  savePositions({markLayoutEdited:false})
+  setAllowImportLayoutOnLoad(true)
   renderSideMenuList()
+  showWelcomeSplash()
  })
 }
 
@@ -4338,6 +4501,7 @@ const loadDataBtn=document.getElementById("loadDataBtn")
 const saveDataBtn=document.getElementById("saveDataBtn")
 const loadDataInput=document.getElementById("loadDataInput")
 const sideMenuStatus=document.getElementById("sideMenuStatus")
+const creatorInfoBtn=document.getElementById("creatorInfoBtn")
 const googleAuthBtn=document.getElementById("googleAuthBtn")
 const cloudSyncBtn=document.getElementById("cloudSyncBtn")
 const cloudAuthStatusEl=document.getElementById("cloudAuthStatus")
@@ -4357,8 +4521,17 @@ const resetConfirmTitleEl=document.getElementById("resetConfirmTitle")
 const resetConfirmMessageEl=document.getElementById("resetConfirmMessage")
 const resetConfirmYesBtn=document.getElementById("resetConfirmYesBtn")
 const resetConfirmNoBtn=document.getElementById("resetConfirmNoBtn")
+const donationScreen=document.getElementById("donationScreen")
+const donationNameEl=document.getElementById("donationName")
+const donationMessageEl=document.getElementById("donationMessage")
+const donationCryptoEl=document.getElementById("donationCrypto")
+const donationPaypalEl=document.getElementById("donationPaypal")
+const donationCloseBtn=document.getElementById("donationCloseBtn")
+const donationAvatarImg=document.getElementById("donationAvatarImg")
+const donationAvatarFallback=document.getElementById("donationAvatarFallback")
 const pinBtn=document.getElementById("pinBtn")
 const statusToastEl=document.getElementById("statusToast")
+const welcomeSplashEl=document.getElementById("welcomeSplash")
 const marginTitleEl=document.getElementById("marginTitle")
 const profitRiskLabelEl=document.getElementById("profitRiskLabel")
 const entryPriceLabelEl=document.getElementById("entryPriceLabel")
@@ -4385,10 +4558,12 @@ let spaceDragStart=null
 let sideMenuHoverTimer=null
 let sideMenuCloseTimer=null
 let statusToastTimer=null
+let welcomeSplashTimer=null
 let windowsScale=clampWindowScale(parseFloat(localStorage.getItem(WINDOW_SCALE_KEY) || String(DEFAULT_WINDOW_SCALE)))
 let notesSpellcheckEnabled=localStorage.getItem(NOTES_SPELLCHECK_KEY)!=="0"
 let isLocked=false
 let isResetConfirmOpen=false
+let isDonationScreenOpen=false
 let lockViewSnapshot=""
 let lockPasswordVerifier=localStorage.getItem(LOCK_PASSWORD_VERIFIER_KEY) || ""
 let lockFailedAttempts=Math.max(0,parseInt(localStorage.getItem(LOCK_FAILED_ATTEMPTS_KEY) || "0",10) || 0)
@@ -4435,6 +4610,11 @@ function setCaptureButtonText(){
  captureTotalBtn.insertBefore(document.createTextNode(label),captureTotalBtn.firstChild || null)
 }
 
+function buildDonationContactHtml(labelKey,value,kind){
+ const copyLabel=t("copy")
+ return `<span class="donation-line-content"><span class="donation-contact-label">${escapeHtml(t(labelKey))}</span> <span class="donation-contact-value">${escapeHtml(value)}</span></span><button class="donation-copy-btn" type="button" data-copy-donation="${escapeHtml(kind)}" aria-label="${escapeHtml(copyLabel)}" title="${escapeHtml(copyLabel)}"></button>`
+}
+
 function applyLanguage(){
  document.documentElement.lang=currentLanguage
  if(topbarTitleEl) topbarTitleEl.innerText=t("appTitle")
@@ -4443,6 +4623,24 @@ function applyLanguage(){
  if(menuEdgeLabelEl) menuEdgeLabelEl.innerText=t("menu")
  if(loadDataBtn) loadDataBtn.innerText=t("loadData")
  if(saveDataBtn) saveDataBtn.innerText=t("saveData")
+ if(creatorInfoBtn){
+  creatorInfoBtn.innerText="© Created by Olexandr Skorobagatko. Ukraine. 2026"
+  creatorInfoBtn.setAttribute("aria-label",t("creatorInfoLabel"))
+  creatorInfoBtn.title=t("creatorInfoLabel")
+ }
+ if(donationNameEl) donationNameEl.innerText=t("creatorName")
+ if(donationMessageEl) donationMessageEl.innerText=t("creatorSupportMessage")
+ if(donationCryptoEl){
+  donationCryptoEl.innerHTML=buildDonationContactHtml("creatorCryptoLabel",DONATION_ERC20_ADDRESS,"erc20")
+ }
+ if(donationPaypalEl){
+  donationPaypalEl.innerHTML=buildDonationContactHtml("creatorPaypalLabel",DONATION_PAYPAL_EMAIL,"paypal")
+ }
+ if(donationCloseBtn){
+  donationCloseBtn.innerText=t("creatorThanks")
+  donationCloseBtn.setAttribute("aria-label",t("creatorThanks"))
+  donationCloseBtn.title=t("creatorThanks")
+ }
  if(lockTitleEl) lockTitleEl.innerText=t("lockTitle")
  if(lockUnlockBtn) lockUnlockBtn.innerText=t("unlock")
  if(resetConfirmTitleEl) resetConfirmTitleEl.innerText=t("confirmTitle")
@@ -4550,6 +4748,7 @@ if(dayTabsNextBtn){
   updateNotesPanelMeta(panel,index)
   setNotesToolbarLanguage(panel)
  })
+ syncWelcomeNoteLanguageIfDefault()
  refreshPanelCollapsedBadges()
  renderClockSelectOptions()
  updateMarketClocks()
@@ -5276,9 +5475,13 @@ isPinned=localStorage.getItem(PIN_KEY)==="1"
 applyWindowScale()
 
 syncNotesPanels(notesItems.length)
+const isFirstLaunchWithoutLayout=!hasAnySavedPosition()
 applySavedPositions()
-if(!hasAnySavedPosition()){
+if(isFirstLaunchWithoutLayout){
+ ensureCenteredWelcomeNotePanel({forceCreate:true})
  setInitialPositions()
+ savePositions()
+ showWelcomeSplash()
 }
 
 refreshDraggables().forEach(el=>enableDrag(el))
@@ -5293,6 +5496,8 @@ initWorkspaceDrag()
 initPanelSelection()
 initKeyboardPanelNudge()
 initWindowScaleShortcut()
+initContextMenuBlock()
+initSaveDataShortcut()
 initCollapseButtons()
 initUndoShortcut()
 if(langToggleBtn){
@@ -5343,9 +5548,15 @@ function hasAnySavedPosition(){
 
 function getPanelTopSafeY(){
  const topbarBottom=(document.querySelector(".topbar")?.getBoundingClientRect()?.bottom ?? 0)
+ const layoutRect=layoutEl?.getBoundingClientRect?.() || null
  const scaleRaw=Number(windowsScale)
  const scale=(Number.isFinite(scaleRaw) && scaleRaw>0) ? scaleRaw : 1
- return Math.max(20,Math.round((topbarBottom+4)/scale))
+ const topGapPx=2
+ const viewportTopPx=topbarBottom+topGapPx
+ if(layoutRect){
+  return Math.round((viewportTopPx-layoutRect.top)/scale)
+ }
+ return Math.round(viewportTopPx/scale)
 }
 
 function applySavedPositions(){
@@ -5398,32 +5609,185 @@ function applySavedPositions(){
 }
 
 function setInitialPositions(){
- const w=window.innerWidth
- const h=window.innerHeight
+ const scaleRaw=Number(windowsScale)
+ const scale=(Number.isFinite(scaleRaw) && scaleRaw>0) ? scaleRaw : 1
  const minTop=getPanelTopSafeY()
- const sizes=draggables.map(el=>({el,w:el.offsetWidth,h:el.offsetHeight}))
- const totalW=sizes.reduce((s,v)=>s+v.w,0)+GAP*(sizes.length-1)
- if(totalW<=w-40){
-  let startX=(w-totalW)/2
-  const centerY=h/2
-  sizes.forEach(item=>{
-   const x=startX
-   const y=centerY - item.h/2
-   item.el.style.left=`${Math.max(20,x)}px`
-   item.el.style.top=`${Math.max(minTop,y)}px`
-   startX += item.w + GAP
+ const visiblePanels=draggables.filter(panel=>!panel.classList.contains("panel-hidden"))
+ if(!visiblePanels.length) return
+
+ const layoutRect=layoutEl?.getBoundingClientRect?.() || null
+ const topbarBottom=document.querySelector(".topbar")?.getBoundingClientRect()?.bottom ?? 0
+ const weeklyProfitRect=document.querySelector(".weekly-profit")?.getBoundingClientRect?.() || null
+ const weeklyProfitMainRect=document.querySelector(".weekly-profit-main")?.getBoundingClientRect?.() || null
+ const workTopScreen=Math.max(topbarBottom+12,(weeklyProfitRect?.bottom ?? (topbarBottom+46))+12)
+ const workBottomScreen=Math.max(workTopScreen+140,window.innerHeight-16)
+ const centerXScreen=weeklyProfitMainRect ? (weeklyProfitMainRect.left + (weeklyProfitMainRect.width/2)) : (window.innerWidth/2)
+ const centerYScreen=(workTopScreen+workBottomScreen)/2
+
+ const screenToWorldX=(x)=>{
+  if(!layoutRect) return x
+  return (x-layoutRect.left)/scale
+ }
+ const screenToWorldY=(y)=>{
+  if(!layoutRect) return y
+  return (y-layoutRect.top)/scale
+ }
+
+ const leftLimitX=screenToWorldX(20)
+ const rightLimitX=screenToWorldX(window.innerWidth-20)
+ const topLimitY=Math.max(minTop,screenToWorldY(workTopScreen))
+ const bottomLimitY=screenToWorldY(workBottomScreen)
+ const centerX=screenToWorldX(centerXScreen)
+ const centerY=screenToWorldY(centerYScreen)
+ const expandedLiftY=350
+ const notesExtraLiftY=580
+
+ const expandedOffsets={
+  margin:{x:-420,y:-80},
+  totals:{x:-190,y:-210},
+  tracker:{x:20,y:-155},
+  calendar:{x:-210,y:-25},
+  chart:{x:190,y:-35},
+  clocks:{x:320,y:-275}
+ }
+
+ const getExpandedPosition=(panel,index)=>{
+  const panelW=Math.max(40,panel.offsetWidth||72)
+  const panelH=Math.max(40,panel.offsetHeight||74)
+  const panelId=String(panel.dataset.dragId || "")
+  let offset=expandedOffsets[panelId] || null
+  if(!offset && isNotesPanelId(panelId)){
+   if(isWelcomeNotePanel(panel)){
+    offset={x:0,y:0}
+   }else{
+   const noteIndex=Math.max(0,Number(panel.dataset.noteIndex)||0)
+   offset={
+    x:390 + ((noteIndex%2)*230),
+    y:90 + (Math.floor(noteIndex/2)*170)
+   }
+   }
+  }
+  if(!offset){
+   offset={x:-40 + (index*28),y:80 + (index*22)}
+  }
+  const rawX=(centerX + offset.x) - (panelW/2)
+  const noteLift=isNotesPanelId(panelId) ? notesExtraLiftY : 0
+  const rawY=(centerY + offset.y - expandedLiftY - noteLift) - (panelH/2)
+  const maxX=Math.max(leftLimitX,rightLimitX-panelW)
+  const maxY=Math.max(topLimitY,bottomLimitY-panelH)
+  return {
+   x:Math.max(leftLimitX,Math.min(maxX,Math.round(rawX))),
+   y:Math.max(topLimitY,Math.min(maxY,Math.round(rawY)))
+  }
+ }
+
+ let expandedClusterBottom=topLimitY
+ visiblePanels.forEach((panel,index)=>{
+  const expandedPos=getExpandedPosition(panel,index)
+  const panelExpandedHeight=Math.max(40,panel.offsetHeight||74)
+  expandedClusterBottom=Math.max(expandedClusterBottom,expandedPos.y+panelExpandedHeight)
+  panel.dataset.expandedX=String(expandedPos.x)
+  panel.dataset.expandedY=String(expandedPos.y)
+  panel.classList.add("collapsed")
+ })
+
+ const folderOrderByPanelId={
+  tracker:0,
+  totals:1,
+  chart:2,
+  calendar:3,
+  margin:4,
+  clocks:5,
+  notes:6
+ }
+ const getFolderOrderRank=(panel)=>{
+  const id=String(panel?.dataset?.dragId || "")
+  if(isNotesPanelId(id)){
+   const noteIndex=Math.max(0,Number(panel?.dataset?.noteIndex) || 0)
+   return folderOrderByPanelId.notes + (noteIndex/1000)
+  }
+  if(Object.prototype.hasOwnProperty.call(folderOrderByPanelId,id)){
+   return folderOrderByPanelId[id]
+  }
+  return 999
+ }
+ const orderedFolderPanels=[...visiblePanels]
+  .map((panel,index)=>({panel,index,rank:getFolderOrderRank(panel)}))
+  .sort((a,b)=>(a.rank-b.rank) || (a.index-b.index))
+  .map(item=>item.panel)
+
+ const collapsedItems=orderedFolderPanels.map(panel=>{
+  const rect=panel.getBoundingClientRect()
+  return {
+   panel,
+   width:Math.max(40,Math.round(rect.width||panel.offsetWidth||72)),
+   height:Math.max(40,Math.round(rect.height||panel.offsetHeight||74))
+  }
+ })
+
+ const maxRowWidth=Math.max(140,rightLimitX-leftLimitX)
+ const rows=[]
+ let currentRow={items:[],width:0,height:0}
+
+ collapsedItems.forEach(item=>{
+  const nextWidth=currentRow.items.length ? currentRow.width+GAP+item.width : item.width
+  if(currentRow.items.length && nextWidth>maxRowWidth){
+   rows.push(currentRow)
+   currentRow={items:[],width:0,height:0}
+  }
+  currentRow.width=currentRow.items.length ? currentRow.width+GAP+item.width : item.width
+  currentRow.height=Math.max(currentRow.height,item.height)
+  currentRow.items.push(item)
+ })
+ if(currentRow.items.length){
+  rows.push(currentRow)
+ }
+
+ const totalHeight=rows.reduce((sum,row)=>sum+row.height,0)+GAP*Math.max(0,rows.length-1)
+ const maxStartY=Math.max(topLimitY,bottomLimitY-totalHeight)
+ const desiredStartY=Math.round(expandedClusterBottom+GAP+expandedLiftY)
+ let startY=Math.max(topLimitY,Math.min(maxStartY,desiredStartY))
+
+ rows.forEach(row=>{
+  const centeredRowX=Math.round(centerX-(row.width/2))
+  const maxStartX=Math.max(leftLimitX,rightLimitX-row.width)
+  let nextX=Math.max(leftLimitX,Math.min(maxStartX,centeredRowX))
+  row.items.forEach(item=>{
+   const roundedX=Math.round(nextX)
+   const roundedY=Math.round(startY)
+   item.panel.style.left=`${roundedX}px`
+   item.panel.style.top=`${roundedY}px`
+   item.panel.dataset.folderX=String(roundedX)
+   item.panel.dataset.folderY=String(roundedY)
+   nextX += item.width + GAP
   })
- }else{
-  let startY=(h-(sizes.reduce((s,v)=>s+v.h,0)+GAP*(sizes.length-1)))/2
-  const centerX=w/2
-  sizes.forEach(item=>{
-   const x=centerX - item.w/2
-   const y=startY
-   item.el.style.left=`${Math.max(20,x)}px`
-   item.el.style.top=`${Math.max(minTop,y)}px`
-   startY += item.h + GAP
+  startY += row.height + GAP
+ })
+
+ const targetCenterXScreen=weeklyProfitMainRect
+  ? (weeklyProfitMainRect.left + (weeklyProfitMainRect.width/2))
+  : (window.innerWidth/2)
+ const targetCenterXWorld=screenToWorldX(targetCenterXScreen)
+ const panelBounds=visiblePanels.map(panel=>{
+  const width=Math.max(40,panel.offsetWidth||72)
+  const x=parseFloat(panel.style.left)||0
+  return {panel,x,width}
+ })
+ const minX=Math.min(...panelBounds.map(item=>item.x))
+ const maxX=Math.max(...panelBounds.map(item=>item.x+item.width))
+ const currentCenterX=(minX+maxX)/2
+ const requestedShift=targetCenterXWorld-currentCenterX
+ const minAllowedShift=leftLimitX-minX
+ const maxAllowedShift=rightLimitX-maxX
+ const appliedShift=Math.max(minAllowedShift,Math.min(maxAllowedShift,requestedShift))
+ if(Math.abs(appliedShift)>0.01){
+  panelBounds.forEach(item=>{
+   const nextX=Math.round(item.x+appliedShift)
+   item.panel.style.left=`${nextX}px`
+   item.panel.dataset.folderX=String(nextX)
   })
  }
+
 }
 
 function layoutPanelsInRows(){
@@ -5453,8 +5817,8 @@ function initPanelSelection(){
  if(!layoutEl || !panelSelectionBox) return
 
  document.addEventListener("pointerdown",(e)=>{
-  if(e.button!==0) return
-  if(isLocked || isResetConfirmOpen || spaceDragMode) return
+ if(e.button!==0) return
+  if(isLocked || isResetConfirmOpen || isDonationScreenOpen || spaceDragMode) return
   if(sideMenu?.classList.contains("open")) return
   if(!isPanelSelectionBackgroundTarget(e.target)) return
  panelSelectionState={
@@ -5667,6 +6031,23 @@ function showStatusToast(message){
  },800)
 }
 
+function showWelcomeSplash(){
+ if(!welcomeSplashEl) return
+ welcomeSplashEl.classList.remove("show")
+ void welcomeSplashEl.offsetWidth
+ welcomeSplashEl.classList.add("show")
+ clearTimeout(welcomeSplashTimer)
+ welcomeSplashTimer=setTimeout(()=>{
+  welcomeSplashEl.classList.remove("show")
+ },3400)
+}
+
+function initContextMenuBlock(){
+ document.addEventListener("contextmenu",(e)=>{
+  e.preventDefault()
+ })
+}
+
 function showPinStateToast(){
  showStatusToast(isPinned ? "PIN WINDOWS ON" : "PIN WINDOWS OFF")
 }
@@ -5690,9 +6071,9 @@ function showWindowScaleToast(){
 }
 
 function initWindowScaleShortcut(){
- document.addEventListener("wheel",(e)=>{
-  if(!(e.ctrlKey || e.metaKey)) return
-  if(isLocked || isResetConfirmOpen) return
+document.addEventListener("wheel",(e)=>{
+ if(!(e.ctrlKey || e.metaKey)) return
+  if(isLocked || isResetConfirmOpen || isDonationScreenOpen) return
   e.preventDefault()
   const direction=e.deltaY<0 ? 1 : -1
   const nextScale=clampWindowScale(windowsScale + (direction*WINDOW_SCALE_STEP))
@@ -5948,9 +6329,41 @@ function setResetConfirmOpen(isOpen){
  }
 }
 
+function setDonationScreenOpen(isOpen){
+ if(!donationScreen) return
+ isDonationScreenOpen=isOpen
+ donationScreen.classList.toggle("open",isOpen)
+ if(isOpen){
+  setSideMenuOpen(false)
+  requestAnimationFrame(()=>{
+   if(donationCloseBtn) donationCloseBtn.focus()
+  })
+ }
+}
+
+function syncDonationAvatarFallback(){
+ if(!donationAvatarImg || !donationAvatarFallback) return
+ const hasImage=!!donationAvatarImg.currentSrc && donationAvatarImg.naturalWidth>0 && donationAvatarImg.naturalHeight>0
+ donationAvatarImg.classList.toggle("is-hidden",!hasImage)
+ donationAvatarFallback.classList.toggle("is-hidden",hasImage)
+}
+
+if(donationAvatarImg){
+ donationAvatarImg.addEventListener("load",syncDonationAvatarFallback)
+ donationAvatarImg.addEventListener("error",syncDonationAvatarFallback)
+ syncDonationAvatarFallback()
+}
+
 if(sideMenuOverlay){
  sideMenuOverlay.addEventListener("click",()=>{
   setSideMenuOpen(false)
+ })
+}
+
+if(creatorInfoBtn){
+ creatorInfoBtn.addEventListener("click",()=>{
+  if(isLocked || isResetConfirmOpen || isDonationScreenOpen) return
+  setDonationScreenOpen(true)
  })
 }
 
@@ -6008,8 +6421,29 @@ if(resetConfirmScreen){
  })
 }
 
+if(donationCloseBtn){
+ donationCloseBtn.addEventListener("click",()=>{
+  setDonationScreenOpen(false)
+ })
+}
+
+if(donationScreen){
+ donationScreen.addEventListener("click",async (e)=>{
+  const copyBtn=e.target.closest?.("[data-copy-donation]")
+  if(copyBtn){
+   e.preventDefault()
+   e.stopPropagation()
+   await handleDonationCopy(copyBtn.dataset.copyDonation)
+   return
+  }
+  if(e.target!==donationScreen) return
+  setDonationScreenOpen(false)
+ })
+}
+
 document.addEventListener("pointermove",(e)=>{
  if(isResetConfirmOpen) return
+ if(isDonationScreenOpen) return
  if(isLocked) return
  if(sideMenu?.classList.contains("open")){
   return
@@ -6157,41 +6591,55 @@ sideMenuList.addEventListener("change",(e)=>{
  })
 }
 
-if(saveDataBtn){
- saveDataBtn.addEventListener("click",async ()=>{
-  if(isLocked || isResetConfirmOpen) return
-  try{
-   const password=window.prompt(t("promptEncryptPassword"))
-   if(password===null) return
-   if(!password){
-    setSideMenuStatus(t("statusPasswordRequired"),"error")
-    return
-   }
-   const confirmPassword=window.prompt(t("promptRepeatPassword"))
-   if(confirmPassword===null) return
-   if(password!==confirmPassword){
-    setSideMenuStatus(t("statusPasswordsMismatch"),"error")
-    return
-   }
-   const snapshot=serializeExportState()
-   const encryptedFile=await encryptStateSnapshot(snapshot,password)
-   await saveLockPasswordVerifier(password)
-   const stamp=new Date().toISOString().slice(0,10)
-   const fileName=`weekly-trade-tracker-${stamp}-v${APP_VERSION}.wtt`
-   await saveEncryptedDataFile(fileName,encryptedFile)
-   setSideMenuStatus(t("statusEncryptedSaved"),"success")
-  }catch(error){
-   if(error?.name==="AbortError"){
-    return
-   }
-   setSideMenuStatus(t("statusSaveFailed"),"error")
+async function triggerSaveData(){
+ if(isLocked || isResetConfirmOpen || isDonationScreenOpen) return
+ try{
+  const password=window.prompt(t("promptEncryptPassword"))
+  if(password===null) return
+  if(!password){
+   setSideMenuStatus(t("statusPasswordRequired"),"error")
+   return
   }
+  const confirmPassword=window.prompt(t("promptRepeatPassword"))
+  if(confirmPassword===null) return
+  if(password!==confirmPassword){
+   setSideMenuStatus(t("statusPasswordsMismatch"),"error")
+   return
+  }
+  const snapshot=serializeExportState()
+  const encryptedFile=await encryptStateSnapshot(snapshot,password)
+  await saveLockPasswordVerifier(password)
+  const stamp=new Date().toISOString().slice(0,10)
+  const fileName=`weekly-trade-tracker-${stamp}-v${APP_VERSION}.wtt`
+  await saveEncryptedDataFile(fileName,encryptedFile)
+  setSideMenuStatus(t("statusEncryptedSaved"),"success")
+ }catch(error){
+  if(error?.name==="AbortError"){
+   return
+  }
+  setSideMenuStatus(t("statusSaveFailed"),"error")
+ }
+}
+
+function initSaveDataShortcut(){
+ document.addEventListener("keydown",(e)=>{
+  if(!(e.ctrlKey || e.metaKey) || e.altKey) return
+  if(e.code!=="KeyS") return
+  e.preventDefault()
+  if(e.repeat) return
+  void triggerSaveData()
+ })
+}
+
+if(saveDataBtn){
+ saveDataBtn.addEventListener("click",()=>{
+  void triggerSaveData()
  })
 }
 
 if(loadDataBtn && loadDataInput){
  loadDataBtn.addEventListener("click",()=>{
-  if(isLocked || isResetConfirmOpen) return
+  if(isLocked || isResetConfirmOpen || isDonationScreenOpen) return
   loadDataInput.value=""
   loadDataInput.click()
  })
@@ -6208,8 +6656,11 @@ if(loadDataBtn && loadDataInput){
    }
    const fileText=await file.text()
    const snapshot=await decryptStateSnapshot(fileText,password)
+   const parsedState=JSON.parse(snapshot)
    await saveLockPasswordVerifier(password)
-  applySerializedState(snapshot,{applyLayout:false})
+   const shouldApplyImportedLayout=allowImportLayoutOnLoad && hasLayoutInStatePayload(parsedState)
+  applySerializedState(JSON.stringify(parsedState),{applyLayout:shouldApplyImportedLayout})
+   setAllowImportLayoutOnLoad(false)
   undoStack=[]
   redoStack=[]
   lastCommittedState=serializeAppState()
@@ -6382,7 +6833,7 @@ function initTotalsPanelResizeObserver(){
   totalsResizeTimer=setTimeout(()=>{
    lastWidth=totalsPanel.offsetWidth
    lastHeight=totalsPanel.offsetHeight
-   savePositions()
+   savePositions({markLayoutEdited:false})
    lastCommittedState=serializeAppState()
   },120)
  })
@@ -7692,7 +8143,7 @@ function initNotePanel(panel){
    notesResizeTimer=setTimeout(()=>{
     lastWidth=panel.offsetWidth
     lastHeight=panel.offsetHeight
-    savePositions()
+    savePositions({markLayoutEdited:false})
     lastCommittedState=serializeAppState()
    },120)
   })
@@ -7741,7 +8192,12 @@ function initUndoShortcut(){
    setResetConfirmOpen(false)
    return
   }
+  if(isDonationScreenOpen && e.code==="Escape"){
+   setDonationScreenOpen(false)
+   return
+  }
   if(isResetConfirmOpen) return
+  if(isDonationScreenOpen) return
   if(isLocked && e.code!=="Escape") return
   if(e.code==="Delete"){
    if(isTypingTarget(e.target)) return
@@ -7902,10 +8358,10 @@ function initKeyboardPanelNudge(){
   return Math.round(value/step)*step
  }
 
- document.addEventListener("keydown",(e)=>{
-  if(!ARROW_KEYS.has(e.key)) return
-  if(isLocked || isResetConfirmOpen || isPinned) return
-  if(e.ctrlKey || e.metaKey || e.altKey) return
+document.addEventListener("keydown",(e)=>{
+ if(!ARROW_KEYS.has(e.key)) return
+  if(isLocked || isResetConfirmOpen || isDonationScreenOpen || isPinned) return
+ if(e.ctrlKey || e.metaKey || e.altKey) return
   if(isTypingTarget(e.target)) return
   refreshDraggables()
   const selectedPanels=getSelectedPanels()
@@ -8021,6 +8477,10 @@ function bindCollapseButton(btn){
     panel.style.height=""
     panel.style.minHeight=""
    }
+   if(isWelcomeNotePanel(panel)){
+    centerPanelOnScreen(panel)
+    bringToFront(panel)
+   }
   }
   if(panel===trackerPanel){
    refreshTrackerPanelLayout()
@@ -8048,6 +8508,7 @@ function bindCollapseButton(btn){
   requestAnimationFrame(()=>animatePanelExpandFromFolder(panel,transitionFromRect))
  }
 }
+
  panel.__setCollapsedState=togglePanelCollapsed
  btn.addEventListener("click",()=>{
   commitUndoableChange(()=>{
@@ -8066,7 +8527,7 @@ function bindCollapseButton(btn){
 if(panel.dataset.collapseDblReady!=="1"){
   panel.dataset.collapseDblReady="1"
 panel.addEventListener("dblclick",(e)=>{
-  if(isLocked || isResetConfirmOpen) return
+  if(isLocked || isResetConfirmOpen || isDonationScreenOpen) return
   if(!panel.classList.contains("collapsed")) return
   const iconEl=panel.querySelector(".panel-collapsed-icon")
   if(!iconEl) return
@@ -8105,7 +8566,8 @@ panel.addEventListener("dblclick",(e)=>{
 function initCollapseButtons(){
  document.querySelectorAll("[data-collapse-btn]").forEach(btn=>bindCollapseButton(btn))
 }
-function savePositions(){
+function savePositions(options={}){
+ const markLayoutEdited=options.markLayoutEdited!==false
  const data={}
  draggables.forEach(el=>{
   const id=el.dataset.dragId
@@ -8158,9 +8620,12 @@ function savePositions(){
  })
  data.__meta={
   backgroundPosition:document.body.style.backgroundPosition || "",
-  topZIndex
+ topZIndex
  }
  localStorage.setItem(DRAG_KEY,JSON.stringify(data))
+ if(markLayoutEdited){
+  setAllowImportLayoutOnLoad(false)
+ }
  saveNotesPanelLayouts()
  requestCloudSync()
 }

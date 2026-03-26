@@ -3,13 +3,13 @@
 A free, browser-based trading tool — no installation, no backend, no subscription.  
 Works offline. Optionally syncs to the cloud via Firebase.
 
-**[▶ Live Demo](https://Mellokone.github.io/wtt**
+**[▶ Live Demo](https://Mellokone.github.io/wtt)**
 
 ---
 
 ## ✨ Features
 
-- **Margin Calculator** — quickly calculate required margin by profit target, entry/exit price and leverage
+- **Margin Calculator** — calculate required margin by profit target, entry/exit price and leverage
 - **Trade Tracker** — log wins/losses across multiple trades with per-trade tabs
 - **Total PnL** — cumulative stats: win rate, ROI, overall profit/loss
 - **Trade Curve** — visual P&L chart per trade, per month, and overall
@@ -28,12 +28,12 @@ Works offline. Optionally syncs to the cloud via Firebase.
 ## 🚀 Quick Start
 
 ### Option A — Use online
-Visit the live demo link above. No setup needed.
+Visit **[mellokone.github.io/wtt](https://Mellokone.github.io/wtt)**
 
 ### Option B — Run locally
 ```
-git clone https://github.com/Mellokone/WTT.git
-cd trading-tools
+git clone https://github.com/Mellokone/wtt.git
+cd wtt
 # Open index.html in your browser
 ```
 > All data is saved in your browser's `localStorage` — no server required.
@@ -52,12 +52,14 @@ It requires a free Firebase project. See the full setup guide:
 ## 📁 Project Structure
 
 ```
-trading-tools/
+wtt/
 ├── index.html                  — main app
 ├── css/
 │   └── style.css               — all styles
 ├── js/
 │   └── app.js                  — all logic
+├── img/
+│   └── mellok.jpg              — author avatar (donation screen)
 ├── docs/
 │   └── FIREBASE_SETUP.md       — cloud sync setup guide
 ├── firebase-config.example.js  — Firebase config template
@@ -71,8 +73,8 @@ trading-tools/
 
 ## 🛠 Tech Stack
 
-- Vanilla HTML / CSS / JavaScript — zero dependencies, zero build step
-- Firebase Auth + Firestore (optional, for cloud sync)
+Vanilla HTML / CSS / JavaScript — zero dependencies, zero build step.  
+Firebase Auth + Firestore (optional, for cloud sync).
 
 ---
 
