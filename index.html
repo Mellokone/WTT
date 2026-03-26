@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trading Tools</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52%' x='50%' font-size='42' text-anchor='middle'%3E%F0%9F%92%B5%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+
+<!-- Firebase config — see docs/FIREBASE_SETUP.md -->
+<!-- <script src="firebase-config.js"></script> -->
+
+</head>
+
+<body>
+
+<svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+  <filter id="trackerHorizontalBlur">
+    <feGaussianBlur in="SourceGraphic" stdDeviation="0.8 0.001"></feGaussianBlur>
+  </filter>
+</svg>
+
+<div class="topbar">
+  <div class="left-controls">
+    <button id="lockBtnTop" class="btn lock-top" aria-label="Lock" title="Lock"></button>
+    <button id="pinBtn" class="btn" aria-label="Pin windows" title="Pin windows"></button>
+  </div>
+  <div id="topbarTitle" class="title">Weekly Trade Tracker</div>
+  <div class="right-controls">
+    <button id="googleAuthBtn" class="login-btn" type="button" aria-label="Login" title="Login">LOGIN</button>
+    <button id="langToggleBtn" class="lang-toggle" type="button" aria-label="Language" title="Language">УКР</button>
+    <button id="resetBtnTop" class="btn reset-top" aria-label="Reset all" title="Reset all" onclick="resetTrades()"></button>
+  </div>
+</div>
+<div id="statusToast" class="status-toast" aria-live="polite"></div>
+
+<div id="sideMenuOverlay" class="side-menu-overlay"></div>
+<div id="panelSelectionBox" class="panel-selection-box"></div>
+<aside id="sideMenu" class="side-menu">
+<div id="sideMenuTitle" class="side-menu-title">Weekly Trade Tracker v1.678</div>
+  <h3 id="sideMenuHeading">Windows</h3>
+  <div id="sideMenuList" class="side-menu-list"></div>
+  <div class="side-menu-actions">
+    <button id="loadDataBtn" class="load-data-btn" type="button">LOAD DATA</button>
+    <button id="saveDataBtn" class="save-data-btn" type="button">SAVE DATA</button>
+  </div>
+  <div class="side-menu-cloud">
+    <button id="cloudSyncBtn" class="cloud-sync-btn" type="button">SYNC NOW</button>
+    <div id="cloudAuthStatus" class="cloud-auth-status"></div>
+  </div>
+  <div id="sideMenuStatus" class="side-menu-status"></div>
+  <input id="loadDataInput" type="file" accept=".wtt,.json,application/json" hidden>
+  <div class="side-menu-copy">&copy; Created by Olexandr Skorobagatko. Ukraine. 2026</div>
+</aside>
+<div id="menuEdgeLabel" class="menu-edge-label">МЕНЮ</div>
+<div id="folderIconWidget" class="folder-icon-widget" role="button" tabindex="0" aria-label="folder">
+  <div class="folder-icon-shape" aria-hidden="true"></div>
+</div>
+<div id="emptyAsciiArt" class="empty-ascii-art">
+<pre>
+                                                                                          
+                                                                                          
+                                            -+                                            
+                                            +%                                            
+                                            *@                                            
+                                            #@:                                           
+                                            @@=                                           
+                                           :@@*                                           
+                                           +@@%                                           
+                                           %@@@:                                          
+                                          =@@@@*                                          
+                                          %@@@@@                                          
+                                         +@@@@@@=                                         
+                                        :@@@@@@@%          .:                             
+                                       .@@@@@@@@@*         +*                             
+                                       %@@@@@@@@@@=   ..:-*@@#-:..                        
+                                     .%@@@@@@@@@@@@=    .-*@@#-.                          
+                                    :%@@@@@@@@@@@@@@*.     +#                             
+                              -%.  :@@@@@@@@@@@@@@@@@@=    .:                             
+                              +@@- +@@@@@@%#%@@@@@@@@@@%+.                                
+                            .*@@@@*.=%@@%.    .*@@@@@@@@@@#=:                             
+                      .:-=*%@@@@@@@@*=--=-     =@@@@@@@@@@@@@@#+=-:.                      
+             :-=+*#%@@@@@@@@@@@@@@@@@@@@@%%%%%@@@@@@@@@@@@@@@@@@@@@@@@%#*++=:             
+                     .:-=+*%@@@@@@@@@@@@@@*=-::-==*%@@@@@@@@@@%*+=-:.                     
+                             :+#@@@@@@@@@*      +%*=-+%@@@@%=.                            
+                                .=%@@@@@@@%+=-=+%@@@@*.=%@@:                              
+                                   -#@@@@@@@@@@@@@@@@@+  +@.                              
+                                     -@@@@@@@@@@@@@@@*    -:                              
+                                -     .%@@@@@@@@@@@@=                                     
+                              .=@*.    .%@@@@@@@@@@-                                      
+                                -       :@@@@@@@@@=                                       
+                                         *@@@@@@@+                                        
+                                         :@@@@@@#                                         
+                                          %@@@@@:                                         
+                                          =@@@@*                                          
+                                           @@@@.                                          
+                                           #@@#                                           
+                                           =@@=                                           
+                                           :@@:                                           
+                                            @@                                            
+                                            %%                                            
+                                            **                                            
+                                            =+                                            
+                                                                                          
+                                                                                          
+</pre>
+</div>
+
+<div id="lockScreen" class="lock-screen">
+  <form id="lockForm" class="lock-card">
+    <h3 id="lockTitle">Password</h3>
+    <div class="lock-password-field">
+      <input id="lockPassword" type="password" autocomplete="current-password" aria-label="Password">
+      <button id="lockTogglePasswordBtn" class="lock-visibility-btn" type="button" aria-label="Show password" title="Show password">
+        <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"></path>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+        <svg class="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 3l18 18"></path>
+          <path d="M10.6 10.6A3 3 0 0 0 13.4 13.4"></path>
+          <path d="M9.9 5.1A11.3 11.3 0 0 1 12 5c6.5 0 10 7 10 7a18.7 18.7 0 0 1-3 3.7"></path>
+          <path d="M6.7 6.7C4 8.4 2 12 2 12s3.5 6 10 6c1.5 0 2.8-.3 4-.8"></path>
+        </svg>
+      </button>
+    </div>
+    <button id="lockUnlockBtn" type="submit">Unlock</button>
+    <div id="lockError" class="lock-error"></div>
+  </form>
+</div>
+
+<div id="resetConfirmScreen" class="confirm-screen">
+  <div class="confirm-card">
+    <h3 id="resetConfirmTitle">Підтвердження</h3>
+    <p id="resetConfirmMessage">Ви точно хочете скинути всі дані?</p>
+    <div class="confirm-actions">
+      <button id="resetConfirmYesBtn" class="confirm-yes" type="button">ДА</button>
+      <button id="resetConfirmNoBtn" type="button">Ні</button>
+    </div>
+  </div>
+</div>
+
+<div class="weekly-profit">
+  <div class="weekly-profit-main"><span id="weeklyProfitLabel" class="label">TRADE 1 PROFIT:</span><strong id="weeklyProfitValue" class="value">0.00</strong><span class="currency">$</span><span id="weeklyProfitPercent" class="percent">(0.0%)</span></div>
+  <div class="weekly-profit-total"><span id="weeklyTotalProfitLabel" class="total-label">TOTAL PROFIT</span><strong id="weeklyTotalProfitValue" class="total-value">0.00$</strong></div>
+</div>
+
+<div class="scale">
+<div class="layout">
+
+<div class="container" data-drag-id="margin">
+<button class="min-btn" type="button" data-collapse-btn></button>
+<button id="marginFlipBtn" class="flip-btn" type="button" aria-label="Flip margin calculator" title="Flip margin calculator"></button>
+<button class="delete-day-btn" type="button" data-hide-btn aria-label="Hide window" title="Hide window"></button>
+<h2 id="marginTitle">Margin Calculator</h2>
+<div class="margin-flip-shell" id="marginFlipShell">
+  <div class="margin-card" id="marginCard">
+    <div class="margin-face margin-front">
+      <label id="profitRiskLabel" class="calc-label">Profit / Risk</label>
+      <input class="no-spinner calc-input" type="number" id="profit" placeholder="Бажаний прибуток">
+
+      <label id="entryPriceLabel" class="calc-label">Entry Price</label>
+      <input class="no-spinner calc-input" type="number" id="entry">
+
+      <label id="exitPriceLabel" class="calc-label">Exit Price</label>
+      <input class="no-spinner calc-input" type="number" id="exit">
+
+      <label id="leverageLabel" class="calc-label">Leverage</label>
+      <select id="leverage" class="calc-select">
+      <option value="1">1x</option>
+      <option value="5">5x</option>
+      <option value="10" selected>10x</option>
+      <option value="20">20x</option>
+      <option value="50">50x</option>
+      <option value="100">100x</option>
+      <option value="500">500x</option>
+      <option value="1000">1000x</option>
+      </select>
+
+      <div class="stat total-summary margin-summary">
+        <span id="marginResultLabel" class="total-label">Margin:</span>
+        <strong class="totals-sum sum-positive" id="margin">0</strong>
+      </div>
+      <button id="marginResetBtn" class="totals-reset margin-reset" type="button">СКИНУТИ</button>
+    </div>
+    <div class="margin-face margin-back">
+      <div id="marginCalcDisplay" class="margin-calc-display">0</div>
+      <div id="marginCalcPad" class="margin-calc-pad">
+        <button class="margin-calc-btn clear" type="button" data-calc-key="C">C</button>
+        <button class="margin-calc-btn" type="button" data-calc-key="sign">+/-</button>
+        <button class="margin-calc-btn" type="button" data-calc-key="%">%</button>
+        <button class="margin-calc-btn op" type="button" data-calc-key="/">÷</button>
+        <button class="margin-calc-btn" type="button" data-calc-key="7">7</button>
+        <button class="margin-calc-btn" type="button" data-calc-key="8">8</button>
+        <button class="margin-calc-btn" type="button" data-calc-key="9">9</button>
+        <button class="margin-calc-btn op" type="button" data-calc-key="*">×</button>
+        <button class="margin-calc-btn" type="button" data-calc-key="4">4</button>
+        <button class="margin-calc-btn" type="button" data-calc-key="5">5</button>
+        <button class="margin-calc-btn" type="button" data-calc-key="6">6</button>
+        <button class="margin-calc-btn op" type="button" data-calc-key="-">-</button>
+        <button class="margin-calc-btn" type="button" data-calc-key="1">1</button>
+        <button class="margin-calc-btn" type="button" data-calc-key="2">2</button>
+        <button class="margin-calc-btn" type="button" data-calc-key="3">3</button>
+        <button class="margin-calc-btn op" type="button" data-calc-key="+">+</button>
+        <button class="margin-calc-btn zero" type="button" data-calc-key="0">0</button>
+        <button class="margin-calc-btn" type="button" data-calc-key=".">.</button>
+        <button class="margin-calc-btn equals" type="button" data-calc-key="=">=</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="tracker" data-drag-id="tracker">
+<button class="min-btn" type="button" data-collapse-btn></button>
+<button id="trackerFlipBtn" class="flip-btn" type="button" aria-label="Flip tracker" title="Flip tracker"></button>
+<button id="deleteDayBtn" class="delete-day-btn" type="button" aria-label="Delete trade" title="Delete trade"></button>
+<h3 id="trackerCollapsedTitle" class="tracker-collapsed-title">Trade Tracker</h3>
+<div class="tracker-flip-shell" id="trackerFlipShell">
+  <div class="tracker-card" id="trackerCard">
+    <div class="tracker-face tracker-front">
+      <h3 id="trackerFrontTitle">Trade Tracker</h3>
+
+      <div id="dayTabsShell" class="day-tabs-shell">
+        <button id="dayTabsPrevBtn" class="day-tabs-nav prev" type="button" aria-label="Previous trades" title="Previous trades"></button>
+        <div id="dayTabs" class="day-tabs"></div>
+        <button id="dayTabsAddBtn" class="day-tab day-tab-add day-tabs-add-btn" type="button" aria-label="Add trade" title="Add trade">+</button>
+        <button id="dayTabsNextBtn" class="day-tabs-nav next" type="button" aria-label="Next trades" title="Next trades"></button>
+      </div>
+
+      <div class="start-row">
+        <label id="startDepositLabel" for="startDeposit">Initial deposit</label>
+        <input class="no-spinner" type="number" id="startDeposit" min="0" placeholder="Початкова сума депозиту">
+      </div>
+
+      <table>
+      <tbody id="tradeRows"></tbody>
+      <tfoot>
+        <tr class="row-controls-row">
+          <td></td>
+          <td>
+            <div class="btn-group row-controls">
+              <button id="addTradeRowBtn" class="trade-btn row-control-btn" type="button">+</button>
+              <button id="removeTradeRowBtn" class="trade-btn row-control-btn" type="button">-</button>
+            </div>
+          </td>
+          <td></td>
+          <td></td>
+        </tr>
+      </tfoot>
+      </table>
+
+      <div class="stats">
+        <div class="stat wins"><span id="winsLabel">Wins</span><strong id="wins">0</strong></div>
+        <div class="stat losses"><span id="lossesLabel">Loss</span><strong id="losses">0</strong></div>
+      </div>
+      <button id="captureTotalBtn" class="capture-total-btn" type="button">ЗАФІКСУВАТИ <span id="captureState" class="state positive">ПРИБУТОК</span></button>
+    </div>
+    <div class="tracker-face tracker-back">
+      <h3 id="contractsTitle">Contracts</h3>
+      <div id="contractRows" class="contract-rows"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="notes" data-drag-id="notes">
+  <button class="min-btn" type="button" data-collapse-btn></button>
+  <button class="delete-day-btn" type="button" data-hide-btn aria-label="Hide window" title="Hide window"></button>
+  <h3 id="notesTitle" class="notes-title-editable">Notes</h3>
+<div id="notesText" class="notes-editor" contenteditable="true" spellcheck="true" autocorrect="on" autocapitalize="sentences" lang="uk-UA" data-placeholder="..."></div>
+  <div class="notes-toolbar">
+    <button class="notes-tool-btn" type="button" data-note-cmd="bold" title="Bold" aria-label="Bold"><span class="notes-tool-icon notes-tool-icon-bold">B</span></button>
+    <button class="notes-tool-btn" type="button" data-note-cmd="italic" title="Italic" aria-label="Italic"><span class="notes-tool-icon notes-tool-icon-italic">I</span></button>
+    <button class="notes-tool-btn" type="button" data-note-cmd="strike" title="Strikethrough" aria-label="Strikethrough"><span class="notes-tool-icon notes-tool-icon-strike">S</span></button>
+    <button class="notes-tool-btn" type="button" data-note-cmd="underline" title="Underline" aria-label="Underline"><span class="notes-tool-icon notes-tool-icon-underline">U</span></button>
+    <button class="notes-tool-btn" type="button" data-note-cmd="mono" title="Monospace" aria-label="Monospace"><span class="notes-tool-icon notes-tool-icon-mono">&lt;/&gt;</span></button>
+    <button class="notes-tool-btn" type="button" data-note-cmd="spoiler" title="Spoiler" aria-label="Spoiler"><span class="notes-tool-icon notes-tool-icon-spoiler" aria-hidden="true"></span></button>
+    <button class="notes-tool-btn" type="button" data-note-cmd="olist" title="Numbered list" aria-label="Numbered list"><span class="notes-tool-icon">1.</span></button>
+    <button class="notes-tool-btn" type="button" data-note-cmd="alignLeft" title="Align left" aria-label="Align left"><span class="notes-tool-icon" aria-hidden="true"><svg class="notes-tool-svg" viewBox="0 0 12 10"><line x1="1" y1="1.5" x2="11" y2="1.5"></line><line x1="1" y1="5" x2="8.5" y2="5"></line><line x1="1" y1="8.5" x2="10" y2="8.5"></line></svg></span></button>
+    <button class="notes-tool-btn" type="button" data-note-cmd="alignCenter" title="Align center" aria-label="Align center"><span class="notes-tool-icon" aria-hidden="true"><svg class="notes-tool-svg" viewBox="0 0 12 10"><line x1="1.5" y1="1.5" x2="10.5" y2="1.5"></line><line x1="2.5" y1="5" x2="9.5" y2="5"></line><line x1="1.5" y1="8.5" x2="10.5" y2="8.5"></line></svg></span></button>
+    <button class="notes-tool-btn" type="button" data-note-cmd="alignRight" title="Align right" aria-label="Align right"><span class="notes-tool-icon" aria-hidden="true"><svg class="notes-tool-svg" viewBox="0 0 12 10"><line x1="1" y1="1.5" x2="11" y2="1.5"></line><line x1="3.5" y1="5" x2="11" y2="5"></line><line x1="2" y1="8.5" x2="11" y2="8.5"></line></svg></span></button>
+    <button class="notes-tool-btn" type="button" data-note-cmd="clear" title="RESET" aria-label="RESET"><span class="notes-tool-icon">X</span></button>
+  </div>
+</div>
+
+<div class="totals" data-drag-id="totals">
+  <button class="min-btn" type="button" data-collapse-btn></button>
+  <button id="totalsFlipBtn" class="flip-btn" type="button" aria-label="Flip totals" title="Flip totals"></button>
+  <button class="delete-day-btn" type="button" data-hide-btn aria-label="Hide window" title="Hide window"></button>
+  <h3 id="totalsTitle">Total PnL</h3>
+  <div class="totals-flip-shell" id="totalsFlipShell">
+    <div class="totals-card" id="totalsCard">
+      <div class="totals-face totals-front">
+        <div id="totalsMonthTabsShell" class="totals-month-tabs-shell">
+          <button id="totalsMonthTabsPrevBtn" class="day-tabs-nav prev" type="button" aria-label="Previous trades" title="Previous trades"></button>
+          <div id="totalsMonthTabs" class="totals-month-tabs"></div>
+          <button id="totalsMonthTabsNextBtn" class="day-tabs-nav next" type="button" aria-label="Next trades" title="Next trades"></button>
+        </div>
+        <div id="totalsList" class="totals-list"></div>
+        <div class="stat total-summary total-winrate total-winrate-split">
+          <div class="total-metric left">
+            <span id="totalsWinRateLabel" class="total-label">Win rate</span>
+            <strong id="totalsWinRate" class="totals-sum">0.0%</strong>
+          </div>
+          <div class="total-metric right">
+            <span id="totalsRoiLabel" class="total-label">ROI</span>
+            <strong id="totalsRoi" class="totals-sum">0.0%</strong>
+          </div>
+        </div>
+        <div class="stat total-summary">
+          <span id="totalsOverallLabel" class="total-label">Загальний</span>
+          <span id="totalsStatus" class="status-positive">прибуток</span>
+          <strong id="totalsSum" class="totals-sum">0.00$</strong>
+        </div>
+        <button id="totalsResetBtn" class="totals-reset" type="button">СКИНУТИ</button>
+      </div>
+      <div class="totals-face totals-back">
+        <div id="totalsEditMonth" class="totals-edit-month"></div>
+        <div id="totalsEditList" class="totals-edit-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="clock" data-drag-id="clocks">
+  <button class="min-btn" type="button" data-collapse-btn></button>
+  <button id="clockFlipBtn" class="flip-btn" type="button" aria-label="Flip clocks" title="Flip clocks"></button>
+  <button class="delete-day-btn" type="button" data-hide-btn aria-label="Hide window" title="Hide window"></button>
+  <h3 id="clockTitle">Market Clocks</h3>
+  <div class="clock-flip-shell" id="clockFlipShell">
+    <div class="clock-card" id="clockCard">
+      <div class="clock-face clock-front">
+        <div class="clock-list">
+          <div class="clock-row"><span id="clockCity1" class="clock-city">Kyiv</span><strong id="clockTime1" class="clock-time">--:--:--</strong></div>
+          <div class="clock-row"><span id="clockCity2" class="clock-city">New York</span><strong id="clockTime2" class="clock-time">--:--:--</strong></div>
+          <div class="clock-row"><span id="clockCity3" class="clock-city">London</span><strong id="clockTime3" class="clock-time">--:--:--</strong></div>
+          <div class="clock-row"><span id="clockCity4" class="clock-city">Tokyo</span><strong id="clockTime4" class="clock-time">--:--:--</strong></div>
+        </div>
+      </div>
+      <div class="clock-face clock-back">
+        <div class="clock-config-list">
+          <select id="clockSelect1" class="clock-select" data-clock-slot="0"></select>
+          <select id="clockSelect2" class="clock-select" data-clock-slot="1"></select>
+          <select id="clockSelect3" class="clock-select" data-clock-slot="2"></select>
+          <select id="clockSelect4" class="clock-select" data-clock-slot="3"></select>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="chart" data-drag-id="chart">
+  <button class="min-btn" type="button" data-collapse-btn></button>
+  <button class="delete-day-btn" type="button" data-hide-btn aria-label="Hide window" title="Hide window"></button>
+  <h3 id="chartTitle">Trade Curve</h3>
+  <div class="chart-tabs">
+    <button id="chartDayCurveTab" class="chart-tab active" type="button">Trade 1 curve</button>
+    <button id="chartMonthCurveTab" class="chart-tab" type="button">Month Curve</button>
+    <button id="chartTotalCurveTab" class="chart-tab" type="button">Total Curve</button>
+  </div>
+  <div class="chart-wrap">
+    <div class="chart-labels">
+      <div id="chartMax">0$</div>
+      <div id="chartMin">0$</div>
+    </div>
+    <div class="chart-plot">
+      <svg id="depositChart" viewBox="0 0 300 200" preserveAspectRatio="none">
+        <defs>
+          <clipPath id="clipTop">
+            <rect id="clipTopRect" x="0" y="0" width="300" height="100"></rect>
+          </clipPath>
+          <clipPath id="clipBottom">
+            <rect id="clipBottomRect" x="0" y="100" width="300" height="100"></rect>
+          </clipPath>
+        </defs>
+        <line id="chartMidline" class="chart-midline" x1="0" y1="100" x2="300" y2="100"></line>
+        <path id="depositPathTop" class="chart-line top" clip-path="url(#clipTop)" d=""></path>
+        <path id="depositPathBottom" class="chart-line bottom" clip-path="url(#clipBottom)" d=""></path>
+        <path id="roiPath" class="chart-line roi" d=""></path>
+        <circle id="depositStartDot" class="chart-dot top" cx="0" cy="0" r="4"></circle>
+        <circle id="depositEndDot" class="chart-dot top" cx="0" cy="0" r="4"></circle>
+      </svg>
+    </div>
+    <div class="chart-metrics">
+      <div class="chart-roi">
+        <span id="chartRoiLabel" class="chart-winrate-label">ROI:</span>
+        <span id="chartRoiValue" class="chart-winrate-value">--</span>
+      </div>
+      <div class="chart-winrate">
+        <span id="chartWinRateLabel" class="chart-winrate-label">Win rate:</span>
+        <span id="chartWinRateValue" class="chart-winrate-value">0.0%</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="calendar" data-drag-id="calendar">
+  <button class="min-btn" type="button" data-collapse-btn></button>
+  <button class="delete-day-btn" type="button" data-hide-btn aria-label="Hide window" title="Hide window"></button>
+  <h3 id="calendarTitle">Календар PnL</h3>
+  <div class="calendar-toolbar">
+    <div class="calendar-tabs">
+      <button id="calendarDailyTab" class="calendar-tab active" type="button">Щоденні PnL</button>
+      <button id="calendarMonthlyTab" class="calendar-tab" type="button">Щомісячні PnL</button>
+    </div>
+    <div class="calendar-filters">
+      <div id="calendarPicker" class="calendar-picker">
+        <button id="calendarPickerBtn" class="calendar-tab calendar-picker-btn" type="button" aria-label="Calendar picker" title="Calendar picker"></button>
+        <div id="calendarPickerMenu" class="calendar-picker-menu hidden">
+          <div id="calendarPickerGrid" class="calendar-picker-grid"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="calendarMonthCaption" class="calendar-month-caption"></div>
+  <div id="calendarContent" class="calendar-content"></div>
+</div>
+
+</div>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+
+<!-- App logic -->
+<script src="js/app.js"></script>
+
+</body>
+</html>
