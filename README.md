@@ -3,7 +3,7 @@
 A free, browser-based trading tool — no installation, no backend, no subscription.  
 Works offline. Optionally syncs to the cloud via Firebase.
 
-**[▶ Live Demo](https://Mellokone.github.io/wtt)**
+**[▶ Live Demo](https://mellokone.github.io/WTT)**
 
 ---
 
@@ -28,7 +28,7 @@ Works offline. Optionally syncs to the cloud via Firebase.
 ## 🚀 Quick Start
 
 ### Option A — Use online
-Visit **[mellokone.github.io/wtt](https://Mellokone.github.io/wtt)**
+Visit **[mellokone.github.io/wtt](https://mellokone.github.io/WTT)**
 
 ### Option B — Run locally
 ```
