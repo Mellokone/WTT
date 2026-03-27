@@ -1,7 +1,7 @@
-
-const APP_VERSION="1.713"
+const APP_VERSION="1.735"
 const DONATION_ERC20_ADDRESS="0x1E7333A8a912cA3a39Fe3699405AF523Ed2c2058"
 const DONATION_PAYPAL_EMAIL="mellok@ukr.net"
+const DONATION_INSTAGRAM_URL="https://www.instagram.com/sashamell/"
 const LANGUAGE_KEY="uiLanguageV1"
 const SUPPORTED_LANGUAGES=new Set(["uk","en"])
 const I18N={
@@ -151,7 +151,9 @@ const I18N={
   statusDataLoaded:"Дані успішно завантажено",
   statusLoadFailed:"Не вдалося завантажити файл або невірний пароль",
   creatorInfoLabel:"Інформація про автора",
-  creatorName:"OLEXANDR SKOROBAGATKO",
+  creatorFirstName:"Olexandr",
+  creatorLastName:"Skorobagako",
+  creatorInstagramLabel:"Instagram",
   creatorSupportMessage:"If you like my product, feel free to donate any amount.",
   creatorCryptoLabel:"ERC-20:",
   creatorPaypalLabel:"PayPal:",
@@ -306,7 +308,9 @@ const I18N={
   statusDataLoaded:"Data loaded successfully",
   statusLoadFailed:"Failed to load file or wrong password",
   creatorInfoLabel:"Creator info",
-  creatorName:"OLEXANDR SKOROBAGATKO",
+  creatorFirstName:"Olexandr",
+  creatorLastName:"Skorobagako",
+  creatorInstagramLabel:"Instagram",
   creatorSupportMessage:"If you like my product, feel free to donate any amount.",
   creatorCryptoLabel:"ERC-20:",
   creatorPaypalLabel:"PayPal:",
@@ -4682,6 +4686,7 @@ const resetConfirmYesBtn=document.getElementById("resetConfirmYesBtn")
 const resetConfirmNoBtn=document.getElementById("resetConfirmNoBtn")
 const donationScreen=document.getElementById("donationScreen")
 const donationNameEl=document.getElementById("donationName")
+const donationNameLinkEl=document.getElementById("donationNameLink")
 const donationMessageEl=document.getElementById("donationMessage")
 const donationCryptoEl=document.getElementById("donationCrypto")
 const donationPaypalEl=document.getElementById("donationPaypal")
@@ -4785,11 +4790,19 @@ function applyLanguage(){
  if(loadDataBtn) loadDataBtn.innerText=t("loadData")
  if(saveDataBtn) saveDataBtn.innerText=t("saveData")
  if(creatorInfoBtn){
-  creatorInfoBtn.innerText="© Created by OLEXANDR SKOROBAGATKO. Ukraine. 2026"
+ creatorInfoBtn.innerText="@created by Skorobagatko Olexander. Ukraine. 2026"
   creatorInfoBtn.setAttribute("aria-label",t("creatorInfoLabel"))
   creatorInfoBtn.title=t("creatorInfoLabel")
  }
- if(donationNameEl) donationNameEl.innerText=t("creatorName")
+ if(donationNameEl){
+  donationNameEl.setAttribute("aria-label",`${t("creatorFirstName")} ${t("creatorLastName")}`)
+ }
+ if(donationNameLinkEl){
+  donationNameLinkEl.innerText=`${t("creatorFirstName")} ${t("creatorLastName")}`
+  donationNameLinkEl.href=DONATION_INSTAGRAM_URL
+  donationNameLinkEl.setAttribute("aria-label",t("creatorInstagramLabel"))
+  donationNameLinkEl.title=t("creatorInstagramLabel")
+ }
  if(donationMessageEl) donationMessageEl.innerText=t("creatorSupportMessage")
  if(donationCryptoEl){
   donationCryptoEl.innerHTML=buildDonationContactHtml("creatorCryptoLabel",DONATION_ERC20_ADDRESS,"erc20")
@@ -4821,11 +4834,11 @@ function applyLanguage(){
  }
  if(authGoogleLabelEl) authGoogleLabelEl.innerText=t("authGoogleButton")
  if(authEmailInput){
-  authEmailInput.placeholder=t("authEmailLabel")
+  authEmailInput.placeholder=""
   authEmailInput.setAttribute("aria-label",t("authEmailLabel"))
  }
  if(authPasswordInput){
-  authPasswordInput.placeholder=t("authPasswordLabel")
+  authPasswordInput.placeholder=""
   authPasswordInput.setAttribute("aria-label",t("authPasswordLabel"))
  }
  if(lockTitleEl) lockTitleEl.innerText=t("lockTitle")
@@ -4900,16 +4913,9 @@ if(dayTabsNextBtn){
  if(weeklyTotalProfitLabelEl){
   weeklyTotalProfitLabelEl.innerText=t("topTotalProfit")
  }
- if(lockBtnTop){
-  lockBtnTop.setAttribute("aria-label",t("lock"))
-  lockBtnTop.title=t("lock")
- }
  if(pinBtn){
   pinBtn.setAttribute("aria-label",t("pinWindows"))
   pinBtn.title=t("pinWindows")
- }
- if(lockPasswordInput){
-  lockPasswordInput.setAttribute("aria-label",t("lockTitle"))
  }
  if(langToggleBtn){
   langToggleBtn.setAttribute("aria-label",t("languageAria"))
@@ -4935,10 +4941,6 @@ if(dayTabsNextBtn){
  refreshPanelCollapsedBadges()
  renderClockSelectOptions()
  updateMarketClocks()
- if(lockPasswordInput){
-  setLockPasswordVisibility(lockPasswordInput.type==="text")
- }
- updateLockFormAvailability()
  setCaptureButtonText()
  renderDayTabs()
  renderChartTabs()
@@ -5699,23 +5701,12 @@ updateTotalsFlipUI()
 updateClockFlipUI()
 updateMarketClocks()
 setInterval(updateMarketClocks,1000)
-setInterval(()=>{
- if(!isLocked) return
- updateLockFormAvailability()
-},1000)
 window.addEventListener("resize",updateTrackerCardHeight)
 window.addEventListener("resize",updateMarginCardHeight)
 window.addEventListener("resize",updateTotalsCardHeight)
 window.addEventListener("resize",updateClockCardHeight)
 window.addEventListener("resize",updateDayTabsNavigation)
 window.addEventListener("resize",()=>getNotesPanels().forEach(updateNotesToolbarNavigation))
-if(localStorage.getItem(LOCK_STATE_KEY)==="1"){
- if(lockPasswordVerifier){
-  setLockState(true)
- }else{
-  localStorage.removeItem(LOCK_STATE_KEY)
- }
-}
 lastCommittedState=serializeAppState()
 restoreUndoHistoryFromStorage()
 persistUndoHistory()
@@ -6644,40 +6635,6 @@ if(creatorInfoBtn){
  })
 }
 
-if(lockBtnTop){
- lockBtnTop.addEventListener("click",()=>{
-  setLockState(true)
- })
-}
-
-if(lockTogglePasswordBtn){
- lockTogglePasswordBtn.addEventListener("click",()=>{
-  if(!lockPasswordInput || lockTogglePasswordBtn.disabled) return
-  setLockPasswordVisibility(lockPasswordInput.type==="password")
-  lockPasswordInput.focus()
- })
-}
-
-if(lockForm){
- lockForm.addEventListener("submit",async (e)=>{
-  e.preventDefault()
-  if(updateLockFormAvailability()) return
-  const password=lockPasswordInput?lockPasswordInput.value.trim():""
-  if(await verifyLockPassword(password)){
-   resetLockFailures()
-   setLockState(false)
-   return
-  }
-  registerLockFailure()
-  if(updateLockFormAvailability()) return
-  setLockErrorMessage(t("lockWrongPassword",{count:Math.max(0,LOCK_MAX_FAILED_ATTEMPTS-lockFailedAttempts)}),"error")
-  if(lockPasswordInput){
-   lockPasswordInput.select()
-   lockPasswordInput.focus()
-  }
- })
-}
-
 if(resetConfirmYesBtn){
  resetConfirmYesBtn.addEventListener("click",()=>{
   setResetConfirmOpen(false)
@@ -6886,7 +6843,6 @@ async function triggerSaveData(){
   }
   const snapshot=serializeExportState()
   const encryptedFile=await encryptStateSnapshot(snapshot,password)
-  await saveLockPasswordVerifier(password)
   const stamp=new Date().toISOString().slice(0,10)
   const fileName=`weekly-trade-tracker-${stamp}-v${APP_VERSION}.wtt`
   await saveEncryptedDataFile(fileName,encryptedFile)
@@ -6931,13 +6887,12 @@ if(loadDataBtn && loadDataInput){
    if(!password){
     setSideMenuStatus(t("statusPasswordRequired"),"error")
     return
-   }
-   const fileText=await file.text()
-   const snapshot=await decryptStateSnapshot(fileText,password)
-   const parsedState=JSON.parse(snapshot)
-   await saveLockPasswordVerifier(password)
-   const shouldApplyImportedLayout=allowImportLayoutOnLoad && hasLayoutInStatePayload(parsedState)
-  applySerializedState(JSON.stringify(parsedState),{applyLayout:shouldApplyImportedLayout})
+  }
+  const fileText=await file.text()
+  const snapshot=await decryptStateSnapshot(fileText,password)
+  const parsedState=JSON.parse(snapshot)
+  const shouldApplyImportedLayout=allowImportLayoutOnLoad && hasLayoutInStatePayload(parsedState)
+ applySerializedState(JSON.stringify(parsedState),{applyLayout:shouldApplyImportedLayout})
    setAllowImportLayoutOnLoad(false)
   undoStack=[]
   redoStack=[]
@@ -8912,6 +8867,3 @@ function savePositions(options={}){
  saveNotesPanelLayouts()
  requestCloudSync()
 }
-
-
-
