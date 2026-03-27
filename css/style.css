@@ -876,6 +876,26 @@ z-index:126;
 width:360px;
 text-align:left;
 --calc-width:100%;
+position:relative;
+}
+
+.auth-close-btn{
+position:absolute;
+top:8px;
+right:8px;
+width:10px;
+height:10px;
+border:none;
+border-radius:50%;
+padding:0;
+margin:0;
+background:#da2c51;
+cursor:pointer;
+box-shadow:none;
+}
+
+.auth-close-btn:hover{
+filter:brightness(1.08);
 }
 
 .auth-title{
@@ -908,14 +928,23 @@ opacity:0;
 }
 
 .auth-continue-btn{
-margin-top:6px;
+margin-top:16px;
 width:100%;
 max-width:100%;
 }
 
+.auth-link-row{
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:0;
+margin-top:6px;
+}
+
 .auth-link-btn{
-width:100%;
-margin:6px 0 0 0;
+width:auto;
+flex:1 1 50%;
+margin:0;
 padding:0;
 height:22px;
 border:none;
@@ -926,6 +955,28 @@ letter-spacing:0.35px;
 text-transform:uppercase;
 font-weight:600;
 cursor:pointer;
+}
+
+#authSignUpBtn{
+text-align:left;
+padding-right:8px;
+}
+
+#authForgotBtn{
+text-align:right;
+padding-left:8px;
+position:relative;
+}
+
+#authForgotBtn::before{
+content:"";
+position:absolute;
+left:0;
+top:25%;
+width:1px;
+height:50%;
+background:#2b3139;
+pointer-events:none;
 }
 
 .auth-link-btn:hover{

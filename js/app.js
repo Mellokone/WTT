@@ -1,4 +1,4 @@
-const APP_VERSION="1.737"
+const APP_VERSION="1.742"
 const DONATION_ERC20_ADDRESS="0x1E7333A8a912cA3a39Fe3699405AF523Ed2c2058"
 const DONATION_PAYPAL_EMAIL="mellok@ukr.net"
 const DONATION_INSTAGRAM_URL="https://www.instagram.com/sashamell/"
@@ -27,7 +27,9 @@ const I18N={
   authEmailLabel:"Email address",
   authPasswordLabel:"Password",
   authContinue:"Continue",
+  authSignUp:"Sign up",
   authForgotPassword:"Forgot password",
+  authClose:"Close",
   authGoogleButton:"Sign in with Google",
   authEmailRequired:"Введіть email address",
   authEmailInvalid:"Некоректний email address",
@@ -36,6 +38,9 @@ const I18N={
   authTooManyRequests:"Забагато спроб входу. Спробуйте пізніше",
   authResetSent:"Лист для відновлення пароля надіслано",
   authResetFailed:"Не вдалося надіслати лист для відновлення",
+  authEmailInUse:"Email already in use",
+  authWeakPassword:"Weak password (min 6 chars)",
+  authSignUpSuccess:"Account created",
   menu:"МЕНЮ",
   languageAria:"Мова",
   languageUkrainian:"УКР",
@@ -184,7 +189,9 @@ const I18N={
   authEmailLabel:"Email address",
   authPasswordLabel:"Password",
   authContinue:"Continue",
+  authSignUp:"Sign up",
   authForgotPassword:"Forgot password",
+  authClose:"Close",
   authGoogleButton:"Sign in with Google",
   authEmailRequired:"Enter email address",
   authEmailInvalid:"Invalid email address",
@@ -193,6 +200,9 @@ const I18N={
   authTooManyRequests:"Too many sign-in attempts. Try again later",
   authResetSent:"Password reset email sent",
   authResetFailed:"Failed to send password reset email",
+  authEmailInUse:"Email already in use",
+  authWeakPassword:"Weak password (min 6 chars)",
+  authSignUpSuccess:"Account created",
   menu:"MENU",
   languageAria:"Language",
   languageUkrainian:"УКР",
@@ -488,7 +498,9 @@ function setAuthDialogBusy(isBusy){
  authDialogBusy=!!isBusy
  if(authEmailInput) authEmailInput.disabled=authDialogBusy
  if(authPasswordInput) authPasswordInput.disabled=authDialogBusy
+ if(authCloseBtn) authCloseBtn.disabled=authDialogBusy
  if(authContinueBtn) authContinueBtn.disabled=authDialogBusy
+ if(authSignUpBtn) authSignUpBtn.disabled=authDialogBusy
  if(authForgotBtn) authForgotBtn.disabled=authDialogBusy
  if(authGoogleBtn) authGoogleBtn.disabled=authDialogBusy
  updateCloudControls()
@@ -525,6 +537,8 @@ function getAuthErrorMessage(error){
  if(code==="auth/invalid-email") return t("authEmailInvalid")
  if(code==="auth/missing-password") return t("authPasswordRequired")
  if(code==="auth/user-not-found" || code==="auth/wrong-password" || code==="auth/invalid-credential") return t("authInvalidCredentials")
+ if(code==="auth/email-already-in-use") return t("authEmailInUse")
+ if(code==="auth/weak-password") return t("authWeakPassword")
  if(code==="auth/too-many-requests") return t("authTooManyRequests")
  return t("cloudAuthFailed")
 }
@@ -4666,7 +4680,9 @@ const authEmailLabelEl=document.getElementById("authEmailLabel")
 const authEmailInput=document.getElementById("authEmailInput")
 const authPasswordLabelEl=document.getElementById("authPasswordLabel")
 const authPasswordInput=document.getElementById("authPasswordInput")
+const authCloseBtn=document.getElementById("authCloseBtn")
 const authContinueBtn=document.getElementById("authContinueBtn")
+const authSignUpBtn=document.getElementById("authSignUpBtn")
 const authForgotBtn=document.getElementById("authForgotBtn")
 const authGoogleBtn=document.getElementById("authGoogleBtn")
 const authGoogleLabelEl=document.getElementById("authGoogleLabel")
@@ -4823,10 +4839,19 @@ function applyLanguage(){
   authContinueBtn.setAttribute("aria-label",t("authContinue"))
   authContinueBtn.title=t("authContinue")
  }
+ if(authSignUpBtn){
+  authSignUpBtn.innerText=t("authSignUp")
+  authSignUpBtn.setAttribute("aria-label",t("authSignUp"))
+  authSignUpBtn.title=t("authSignUp")
+ }
  if(authForgotBtn){
   authForgotBtn.innerText=t("authForgotPassword")
   authForgotBtn.setAttribute("aria-label",t("authForgotPassword"))
   authForgotBtn.title=t("authForgotPassword")
+ }
+ if(authCloseBtn){
+  authCloseBtn.setAttribute("aria-label",t("authClose"))
+  authCloseBtn.title=t("authClose")
  }
  if(authGoogleBtn){
   authGoogleBtn.setAttribute("aria-label",t("authGoogleButton"))
@@ -6537,6 +6562,12 @@ if(sideMenuOverlay){
 if(authScreen){
  authScreen.addEventListener("click",(e)=>{
   if(e.target!==authScreen) return
+  return
+ })
+}
+
+if(authCloseBtn){
+ authCloseBtn.addEventListener("click",()=>{
   if(authDialogBusy) return
   setAuthScreenOpen(false)
  })
@@ -6568,6 +6599,47 @@ if(authForm){
   try{
    await cloudAuth.signInWithEmailAndPassword(email,password)
    setAuthDialogError("")
+   setAuthScreenOpen(false)
+  }catch(error){
+   setAuthDialogError(getAuthErrorMessage(error),"error")
+   const errorCode=String(error?.code || "")
+   if(errorCode){
+    setSideMenuStatus(`${t("cloudAuthFailed")}: ${errorCode}`,"error")
+   }else{
+    setSideMenuStatus(t("cloudAuthFailed"),"error")
+   }
+  }finally{
+   setAuthDialogBusy(false)
+  }
+ })
+}
+
+if(authSignUpBtn){
+ authSignUpBtn.addEventListener("click",async ()=>{
+  if(authDialogBusy) return
+  const email=String(authEmailInput?.value || "").trim()
+  const password=String(authPasswordInput?.value || "")
+  if(!email){
+   setAuthDialogError(t("authEmailRequired"),"error")
+   if(authEmailInput) authEmailInput.focus()
+   return
+  }
+  if(!password){
+   setAuthDialogError(t("authPasswordRequired"),"error")
+   if(authPasswordInput) authPasswordInput.focus()
+   return
+  }
+  if(!cloudFirebaseReady || !cloudAuth){
+   setCloudStatus("cloudNotConfigured",{},"error")
+   setSideMenuStatus(t("cloudNotConfigured"),"error")
+   setAuthDialogError(t("cloudNotConfigured"),"error")
+   return
+  }
+  setAuthDialogBusy(true)
+  try{
+   await cloudAuth.createUserWithEmailAndPassword(email,password)
+   setAuthDialogError(t("authSignUpSuccess"),"success")
+   showStatusToast(t("authSignUpSuccess"))
    setAuthScreenOpen(false)
   }catch(error){
    setAuthDialogError(getAuthErrorMessage(error),"error")

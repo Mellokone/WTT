@@ -33,7 +33,7 @@
 <div id="sideMenuOverlay" class="side-menu-overlay"></div>
 <div id="panelSelectionBox" class="panel-selection-box"></div>
 <aside id="sideMenu" class="side-menu">
-<div id="sideMenuTitle" class="side-menu-title">Weekly Trade Tracker v1.737</div>
+<div id="sideMenuTitle" class="side-menu-title">Weekly Trade Tracker v1.742</div>
   <h3 id="sideMenuHeading">Windows</h3>
   <div id="sideMenuList" class="side-menu-list"></div>
   <div class="side-menu-actions">
@@ -100,13 +100,17 @@
 
 <div id="authScreen" class="confirm-screen auth-screen">
   <form id="authForm" class="confirm-card auth-card" novalidate>
+    <button id="authCloseBtn" class="auth-close-btn" type="button" aria-label="Close" title="Close"></button>
     <h3 id="authTitle" class="auth-title">Sign in</h3>
     <label id="authEmailLabel" class="calc-label auth-label" for="authEmailInput">Email address</label>
     <input id="authEmailInput" class="calc-input auth-input" type="email" autocomplete="email" inputmode="email" spellcheck="false">
     <label id="authPasswordLabel" class="calc-label auth-label" for="authPasswordInput">Password</label>
     <input id="authPasswordInput" class="calc-input auth-input" type="password" autocomplete="current-password">
     <button id="authContinueBtn" class="totals-reset auth-continue-btn" type="submit">Continue</button>
-    <button id="authForgotBtn" class="auth-link-btn" type="button">Forgot password</button>
+    <div class="auth-link-row">
+      <button id="authSignUpBtn" class="auth-link-btn" type="button">Sign up</button>
+      <button id="authForgotBtn" class="auth-link-btn" type="button">Forgot password</button>
+    </div>
     <button id="authGoogleBtn" class="gsi-material-button" type="button" aria-label="Sign in with Google" title="Sign in with Google">
       <div class="gsi-material-button-state"></div>
       <div class="gsi-material-button-content-wrapper">
