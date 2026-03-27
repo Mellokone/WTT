@@ -199,7 +199,7 @@ color:#fff;
 }
 
 #pinBtn{
-background:#fbe215;
+background:#2cda6e;
 color:#0b0e11;
 box-shadow:none;
 }
@@ -875,6 +875,7 @@ z-index:126;
 .auth-card{
 width:360px;
 text-align:left;
+--calc-width:100%;
 }
 
 .auth-title{
@@ -895,12 +896,21 @@ transform:translateY(-2px);
 
 .auth-input{
 margin:2px 0 8px 0;
-width:100%;
+width:100% !important;
+max-width:100%;
 box-sizing:border-box;
+display:block;
+}
+
+.auth-card .auth-input::placeholder{
+color:transparent;
+opacity:0;
 }
 
 .auth-continue-btn{
 margin-top:6px;
+width:100%;
+max-width:100%;
 }
 
 .auth-link-btn{
@@ -966,6 +976,7 @@ transition:background-color 0.18s ease,border-color 0.18s ease;
 vertical-align:middle;
 white-space:nowrap;
 width:100%;
+max-width:100%;
 margin-top:8px;
 }
 

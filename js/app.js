@@ -1,4 +1,4 @@
-const APP_VERSION="1.735"
+const APP_VERSION="1.737"
 const DONATION_ERC20_ADDRESS="0x1E7333A8a912cA3a39Fe3699405AF523Ed2c2058"
 const DONATION_PAYPAL_EMAIL="mellok@ukr.net"
 const DONATION_INSTAGRAM_URL="https://www.instagram.com/sashamell/"
