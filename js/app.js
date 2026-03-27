@@ -1,4 +1,4 @@
-const APP_VERSION="1.742"
+const APP_VERSION="1.751"
 const DONATION_ERC20_ADDRESS="0x1E7333A8a912cA3a39Fe3699405AF523Ed2c2058"
 const DONATION_PAYPAL_EMAIL="mellok@ukr.net"
 const DONATION_INSTAGRAM_URL="https://www.instagram.com/sashamell/"
@@ -121,6 +121,8 @@ const I18N={
 	  notesGroup:"Нотатки",
   notesToggleAll:"Показати або сховати всі нотатки",
   notesShowHideButton:"show/hide",
+  notesDeleteLockOn:"Р РѕР·Р±Р»РѕРєСѓРІР°С‚Рё РІРёРґР°Р»РµРЅРЅСЏ РЅРѕС‚Р°С‚РѕРє",
+  notesDeleteLockOff:"Р—Р°Р±Р»РѕРєСѓРІР°С‚Рё РІРёРґР°Р»РµРЅРЅСЏ РЅРѕС‚Р°С‚РѕРє",
   folderIcon:"Папка",
   folderClose:"Закрити папку",
   folderExpand:"Розгорнути папку",
@@ -283,6 +285,8 @@ const I18N={
 	  notesGroup:"Notes",
   notesToggleAll:"Show or hide all notes",
   notesShowHideButton:"show/hide",
+  notesDeleteLockOn:"Unlock note deletion",
+  notesDeleteLockOff:"Lock note deletion",
   folderIcon:"Folder",
   folderClose:"Close folder",
   folderExpand:"Expand folder",
@@ -610,12 +614,11 @@ async function loadCloudState(){
 
 function initCloudSync(){
  if(googleAuthBtn && !googleAuthBtn.dataset.cloudBound){
-  googleAuthBtn.dataset.cloudBound="1"
-  googleAuthBtn.addEventListener("click",async ()=>{
-   if(cloudSyncInFlight || authDialogBusy) return
-   if(cloudUser){
+ googleAuthBtn.dataset.cloudBound="1"
+ googleAuthBtn.addEventListener("click",async ()=>{
+  if(cloudSyncInFlight || authDialogBusy) return
+  if(cloudUser){
     await cloudAuth.signOut()
-    performResetTrades()
     return
    }
    setAuthScreenOpen(true)
@@ -656,6 +659,7 @@ function initCloudSync(){
  }
 
  cloudAuth.onAuthStateChanged(async (user)=>{
+  const previousCloudUser=cloudUser
   cloudUser=user || null
   updateCloudControls()
  if(cloudUser){
@@ -663,6 +667,9 @@ function initCloudSync(){
    setCloudStatus("cloudSignedIn",{email:cloudUser.email || cloudUser.displayName || "Google"},"success")
    await loadCloudState()
   }else{
+   if(previousCloudUser){
+    performResetTrades()
+   }
    cloudPendingSync=false
    lastCloudSyncedSnapshot=""
    setCloudStatus("cloudSignedOut")
@@ -1062,30 +1069,41 @@ async function decryptStateSnapshot(fileText,password){
 async function saveEncryptedDataFile(fileName,content){
  const safeName=String(fileName || "weekly-trade-tracker-data.wtt")
  const safeContent=String(content ?? "")
- if(typeof window.showSaveFilePicker==="function"){
-  const handle=await window.showSaveFilePicker({
-   suggestedName:safeName,
-   types:[{
-    description:"Weekly Trade Tracker data",
-    accept:{
-     "application/json":[".wtt",".json"]
-    }
-   }]
-  })
-  const writable=await handle.createWritable()
-  await writable.write(safeContent)
-  await writable.close()
-  return
+ const downloadByBlob=()=>{
+  const blob=new Blob([safeContent],{type:"application/json"})
+  const url=URL.createObjectURL(blob)
+  const link=document.createElement("a")
+  link.href=url
+  link.download=safeName
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
  }
- const blob=new Blob([safeContent],{type:"application/json"})
- const url=URL.createObjectURL(blob)
- const link=document.createElement("a")
- link.href=url
- link.download=safeName
- document.body.appendChild(link)
- link.click()
- link.remove()
- URL.revokeObjectURL(url)
+ if(typeof window.showSaveFilePicker==="function" && window.isSecureContext){
+  try{
+   const handle=await window.showSaveFilePicker({
+    suggestedName:safeName,
+    types:[{
+     description:"Weekly Trade Tracker data",
+     accept:{
+      "application/json":[".wtt",".json"]
+     }
+    }]
+   })
+   const writable=await handle.createWritable()
+   await writable.write(safeContent)
+   await writable.close()
+   return
+  }catch(error){
+   if(error?.name==="AbortError"){
+    throw error
+   }
+   downloadByBlob()
+   return
+  }
+ }
+ downloadByBlob()
 }
 
 async function copyTextToClipboard(value){
@@ -1296,6 +1314,7 @@ const CLOCK_SELECTION_KEY="clockSelectionsV1"
 const CLOCK_FLIP_KEY="clockFlipV1"
 const DRAG_KEY="panelPositionsV1"
 const GAP=30
+const FOLDER_ICONS_GAP=22
 const PANEL_SELECTOR=".container,.tracker,.chart,.notes,.totals,.clock,.calendar"
 const PANEL_HIDE_SELECTOR=".container,.chart,.notes,.totals,.clock,.calendar"
 const DRAG_INTERACTIVE_SELECTOR='button,input,select,textarea,option,label,a,[role="button"],[contenteditable="true"],.notes-toolbar,.notes-tool-btn,.notes-toolbar-nav,.notes-toolbar-shell,.notes-toolbar-scroll,.notes-title-editable,.notes-title-input,.calendar-content,.calendar-month-caption'
@@ -1309,6 +1328,7 @@ const NOTES_TITLES_KEY="notesTitlesV1"
 const NOTES_PANEL_LAYOUTS_KEY="notesPanelLayoutsV1"
 const NOTES_SPELLCHECK_KEY="notesSpellcheckV1"
 const NOTES_GROUP_COLLAPSED_KEY="notesGroupCollapsedV1"
+const NOTES_ITEM_LOCKS_KEY="notesItemLocksV1"
 const FOLDER_ICON_STATE_KEY="folderIconStateV1"
 const CHART_MODE_KEY="chartModeV1"
 const UNDO_HISTORY_KEY="undoHistoryV1"
@@ -1332,6 +1352,7 @@ let daySessions=JSON.parse(localStorage.getItem(DAY_SESSIONS_KEY))||[]
 let notesItems=loadStoredNotesItems()
 let noteTitles=loadStoredNotesTitles()
 let notesPanelLayouts=loadStoredNotesPanelLayouts()
+let notesItemLocks=loadStoredNotesItemLocks()
 let isNotesGroupCollapsed=localStorage.getItem(NOTES_GROUP_COLLAPSED_KEY)==="1"
 let shouldAnimateNotesGroupOpen=false
 const storedStartDeposit=localStorage.getItem("startDepositV2")
@@ -1430,12 +1451,13 @@ function getWelcomeNoteHtml(lang=currentLanguage){
 
 function ensureCenteredWelcomeNotePanel({forceCreate=false}={}){
  const welcomeHtml=getWelcomeNoteHtml()
- if(forceCreate || notesItems.length===0){
-  notesItems=[welcomeHtml]
-  noteTitles=normalizeNotesTitles(noteTitles,1)
-  notesPanelLayouts={}
-  syncNotesPanels(1)
- }
+  if(forceCreate || notesItems.length===0){
+   notesItems=[welcomeHtml]
+   noteTitles=normalizeNotesTitles(noteTitles,1)
+   notesItemLocks=normalizeNotesItemLocks(notesItemLocks,1)
+   notesPanelLayouts={}
+   syncNotesPanels(1)
+  }
  const notePanel=getNotesPanels()[0]
  if(!notePanel) return
  const editor=notePanel.querySelector(".notes-editor")
@@ -1444,11 +1466,13 @@ function ensureCenteredWelcomeNotePanel({forceCreate=false}={}){
  }
  notesItems[0]=welcomeHtml
  noteTitles=normalizeNotesTitles(noteTitles,notesItems.length)
+ notesItemLocks=normalizeNotesItemLocks(notesItemLocks,notesItems.length)
  notePanel.classList.remove("panel-hidden")
  updateNotesPanelMeta(notePanel,0)
  rememberNotesPanelLayout(notePanel)
  saveNotesItems()
  saveNotesTitles()
+ saveNotesItemLocks()
  saveNotesPanelLayouts()
  refreshDraggables()
  refreshPanelCollapsedBadges()
@@ -1510,6 +1534,12 @@ function normalizeNotesTitles(titles,count=notesItems.length){
  return Array.from({length:safeCount},(_,index)=>normalizeNoteTitle(source[index]))
 }
 
+function normalizeNotesItemLocks(locks,count=notesItems.length){
+ const safeCount=Math.max(MIN_NOTES_PANELS,Math.min(MAX_NOTES_PANELS,Number(count)||MIN_NOTES_PANELS))
+ const source=Array.isArray(locks) ? locks : []
+ return Array.from({length:safeCount},(_,index)=>!!source[index])
+}
+
 function loadStoredNotesItems(){
  try{
   const parsed=JSON.parse(localStorage.getItem(NOTES_ITEMS_KEY) || "null")
@@ -1528,6 +1558,14 @@ function loadStoredNotesTitles(){
  return normalizeNotesTitles([],notesItems.length)
 }
 
+function loadStoredNotesItemLocks(){
+ try{
+  const parsed=JSON.parse(localStorage.getItem(NOTES_ITEM_LOCKS_KEY) || "null")
+  if(Array.isArray(parsed)) return normalizeNotesItemLocks(parsed,notesItems.length)
+ }catch{}
+ return normalizeNotesItemLocks([],notesItems.length)
+}
+
 function saveNotesItems(){
  notesItems=normalizeNotesItems(notesItems)
  localStorage.setItem(NOTES_ITEMS_KEY,JSON.stringify(notesItems))
@@ -1538,6 +1576,11 @@ function saveNotesItems(){
 function saveNotesTitles(){
  noteTitles=normalizeNotesTitles(noteTitles,notesItems.length)
  localStorage.setItem(NOTES_TITLES_KEY,JSON.stringify(noteTitles))
+}
+
+function saveNotesItemLocks(){
+ notesItemLocks=normalizeNotesItemLocks(notesItemLocks,notesItems.length)
+ localStorage.setItem(NOTES_ITEM_LOCKS_KEY,JSON.stringify(notesItemLocks))
 }
 
 function loadStoredNotesPanelLayouts(){
@@ -1710,7 +1753,8 @@ function serializeAppState(){
   notes:{
    items:cloneData(notesItems),
    titles:cloneData(noteTitles),
-   layouts:cloneData(notesPanelLayouts)
+   layouts:cloneData(notesPanelLayouts),
+   locks:cloneData(notesItemLocks)
   },
   chart:{
    mode:chartViewMode
@@ -1761,7 +1805,8 @@ function serializeExportState(){
   notes:{
    items:cloneData(state.notes?.items ?? []),
    titles:cloneData(state.notes?.titles ?? []),
-   layouts:cloneData(state.notes?.layouts ?? {})
+   layouts:cloneData(state.notes?.layouts ?? {}),
+   locks:cloneData(state.notes?.locks ?? [])
   },
   panels:cloneData(state.panels ?? {}),
   workspace:cloneData(state.workspace ?? {})
@@ -1886,6 +1931,7 @@ function applySerializedState(snapshot,options={}){
   ? normalizeNotesItems(cloneData(state.notes.items))
   : normalizeNotesItems((typeof state.notes?.text==="string" && state.notes.text!=="") ? [state.notes.text] : [])
  noteTitles=Array.isArray(state.notes?.titles)?normalizeNotesTitles(cloneData(state.notes.titles),notesItems.length):normalizeNotesTitles([],notesItems.length)
+ notesItemLocks=Array.isArray(state.notes?.locks)?normalizeNotesItemLocks(cloneData(state.notes.locks),notesItems.length):normalizeNotesItemLocks([],notesItems.length)
  if(applyLayout){
   notesPanelLayouts=state.notes?.layouts && typeof state.notes.layouts==="object" ? cloneData(state.notes.layouts) : {}
  }
@@ -1963,6 +2009,7 @@ function applySerializedState(snapshot,options={}){
  localStorage.setItem(CLOCK_FLIP_KEY,clockFlipped?"1":"0")
  saveNotesItems()
  saveNotesTitles()
+ saveNotesItemLocks()
  saveNotesPanelLayouts()
 
  buildRows()
@@ -4597,6 +4644,7 @@ function performResetTrades(){
   document.getElementById("margin").innerText=formatAmount(0)
   notesItems=[]
   noteTitles=[]
+  notesItemLocks=[]
   notesPanelLayouts={}
   clockSlotIds=normalizeClockSlotIds(null)
   marginFlipped=false
@@ -4615,6 +4663,7 @@ function performResetTrades(){
   refreshPanelCollapsedBadges()
   localStorage.removeItem("notesHeightV1")
   localStorage.removeItem(NOTES_TITLES_KEY)
+  localStorage.removeItem(NOTES_ITEM_LOCKS_KEY)
   localStorage.removeItem(NOTES_PANEL_LAYOUTS_KEY)
   localStorage.removeItem(MARGIN_FLIP_KEY)
   localStorage.removeItem(TOTALS_FLIP_KEY)
@@ -5340,12 +5389,18 @@ function syncNotesPanels(targetCount=notesItems.length){
  const clampedCount=Math.max(MIN_NOTES_PANELS,Math.min(MAX_NOTES_PANELS,Number(targetCount)||MIN_NOTES_PANELS))
  notesItems=normalizeNotesItems(notesItems)
  noteTitles=normalizeNotesTitles(noteTitles,notesItems.length)
+ notesItemLocks=normalizeNotesItemLocks(notesItemLocks,notesItems.length)
  if(notesItems.length<clampedCount){
-  while(notesItems.length<clampedCount) notesItems.push("")
+  while(notesItems.length<clampedCount){
+   notesItems.push("")
+   notesItemLocks.push(false)
+  }
  }else if(notesItems.length>clampedCount){
   notesItems=notesItems.slice(0,clampedCount)
+  notesItemLocks=notesItemLocks.slice(0,clampedCount)
  }
  noteTitles=normalizeNotesTitles(noteTitles,clampedCount)
+ notesItemLocks=normalizeNotesItemLocks(notesItemLocks,clampedCount)
 
  const panels=getNotesPanels()
 
@@ -5371,6 +5426,7 @@ function syncNotesPanels(targetCount=notesItems.length){
  refreshDraggables()
   saveNotesItems()
  saveNotesTitles()
+ saveNotesItemLocks()
  saveNotesPanelLayouts()
 }
 
@@ -5397,6 +5453,7 @@ function moveNotesPanel(fromIndex,toIndex){
  const selectedPanels=getSelectedPanels()
  moveArrayItem(notesItems,from,to)
  moveArrayItem(noteTitles,from,to)
+ moveArrayItem(notesItemLocks,from,to)
 
  const panelLayoutMap=new Map(panels.map(panel=>[panel,snapshotNotesPanelLayout(panel)]))
  reorderedPanels.forEach((panel,index)=>updateNotesPanelMeta(panel,index))
@@ -5411,6 +5468,7 @@ function moveNotesPanel(fromIndex,toIndex){
 
  saveNotesItems()
  saveNotesTitles()
+ saveNotesItemLocks()
  saveNotesPanelLayouts()
  refreshDraggables()
  setSelectedPanels(selectedPanels.filter(panel=>panel && !panel.classList.contains("panel-hidden")))
@@ -5419,10 +5477,12 @@ function moveNotesPanel(fromIndex,toIndex){
  return true
 }
 
-function removeNotesPanelByIndex(noteIndex){
+function removeNotesPanelByIndex(noteIndex,options={}){
+ const allowLockedDelete=!!options.allowLockedDelete
  const count=notesItems.length
  if(count<=MIN_NOTES_PANELS) return false
  const index=Math.max(0,Math.min(count-1,Math.floor(Number(noteIndex)||0)))
+ if(notesItemLocks[index] && !allowLockedDelete) return false
  const panels=getNotesPanels()
  if(index>=panels.length) return false
 
@@ -5433,6 +5493,7 @@ function removeNotesPanelByIndex(noteIndex){
 
  notesItems.splice(index,1)
  noteTitles.splice(index,1)
+ notesItemLocks.splice(index,1)
  removePanelFromSelection(panelToRemove)
  panelToRemove.remove()
 
@@ -5447,6 +5508,7 @@ function removeNotesPanelByIndex(noteIndex){
 
  saveNotesItems()
  saveNotesTitles()
+ saveNotesItemLocks()
  saveNotesPanelLayouts()
  refreshDraggables()
  setSelectedPanels(selectedPanels.filter(panel=>panel && !panel.classList.contains("panel-hidden")))
@@ -5929,12 +5991,12 @@ function setInitialPositions(){
  let currentRow={items:[],width:0,height:0}
 
  collapsedItems.forEach(item=>{
-  const nextWidth=currentRow.items.length ? currentRow.width+GAP+item.width : item.width
+  const nextWidth=currentRow.items.length ? currentRow.width+FOLDER_ICONS_GAP+item.width : item.width
   if(currentRow.items.length && nextWidth>maxRowWidth){
    rows.push(currentRow)
    currentRow={items:[],width:0,height:0}
   }
-  currentRow.width=currentRow.items.length ? currentRow.width+GAP+item.width : item.width
+  currentRow.width=currentRow.items.length ? currentRow.width+FOLDER_ICONS_GAP+item.width : item.width
   currentRow.height=Math.max(currentRow.height,item.height)
   currentRow.items.push(item)
  })
@@ -5942,7 +6004,7 @@ function setInitialPositions(){
   rows.push(currentRow)
  }
 
- const totalHeight=rows.reduce((sum,row)=>sum+row.height,0)+GAP*Math.max(0,rows.length-1)
+ const totalHeight=rows.reduce((sum,row)=>sum+row.height,0)+FOLDER_ICONS_GAP*Math.max(0,rows.length-1)
  const maxStartY=Math.max(topLimitY,bottomLimitY-totalHeight)
  const desiredStartY=Math.round(expandedClusterBottom+GAP+expandedLiftY)
  let startY=Math.max(topLimitY,Math.min(maxStartY,desiredStartY))
@@ -5958,9 +6020,9 @@ function setInitialPositions(){
    item.panel.style.top=`${roundedY}px`
    item.panel.dataset.folderX=String(roundedX)
    item.panel.dataset.folderY=String(roundedY)
-   nextX += item.width + GAP
+   nextX += item.width + FOLDER_ICONS_GAP
   })
-  startY += row.height + GAP
+  startY += row.height + FOLDER_ICONS_GAP
  })
 
  const targetCenterXScreen=weeklyProfitMainRect
@@ -6331,20 +6393,24 @@ function renderSideMenuList(){
   const label=isNotesPanelId(id) ? getNotesPanelLabel(noteIndex) : (panelLabelKey ? t(panelLabelKey) : id)
   const checked=!panel.classList.contains("panel-hidden")
   const isSelected=isPanelSelected(panel)
+  const noteIsLocked=isNotesItem ? !!notesItemLocks[noteIndex] : false
   const noteHandle=isNotesItem ? `<button class="side-menu-note-drag-handle" type="button" data-note-drag-handle="${noteIndex}" aria-label="${t("reorderNote")}" title="${t("reorderNote")}">≡</button>` : ""
-  const noteDeleteButton=isNotesItem ? `<button class="side-menu-note-delete-btn" type="button" data-note-delete="${noteIndex}" aria-label="${t("deleteNote")}" title="${t("deleteNote")}" ${notesItems.length<=MIN_NOTES_PANELS?"disabled":""}><span class="side-menu-note-delete-icon">&times;</span></button>` : ""
+  const noteLockLabel=isNotesItem ? t(noteIsLocked ? "notesDeleteLockOn" : "notesDeleteLockOff") : ""
+  const noteLockButton=isNotesItem ? `<button class="side-menu-note-lock-btn${noteIsLocked?" is-locked":""}" type="button" data-note-lock="${noteIndex}" aria-label="${noteLockLabel}" title="${noteLockLabel}"><span class="side-menu-note-lock-icon" aria-hidden="true"></span></button>` : ""
+  const noteDeleteButton=isNotesItem ? `<button class="side-menu-note-delete-btn" type="button" data-note-delete="${noteIndex}" aria-label="${t("deleteNote")}" title="${t("deleteNote")}" ${(notesItems.length<=MIN_NOTES_PANELS || noteIsLocked)?"disabled":""}><span class="side-menu-note-delete-icon">&times;</span></button>` : ""
   const noteIndexAttr=isNotesItem ? ` data-note-index="${noteIndex}"` : ""
-  return `<div class="side-menu-item${isSelected?" is-selected":""}${isNotesItem?" note-item":""}"${noteIndexAttr}>${noteHandle}<span class="side-menu-item-label" data-panel-select="${id}" role="button" tabindex="0">${label}</span><span class="side-menu-item-actions"><input type="checkbox" data-panel-toggle="${id}" aria-label="${t("notesShowHideButton")}" title="${t("notesShowHideButton")}" ${checked?"checked":""}>${noteDeleteButton}</span></div>`
+  return `<div class="side-menu-item${isSelected?" is-selected":""}${isNotesItem?" note-item":""}"${noteIndexAttr}>${noteHandle}<span class="side-menu-item-label" data-panel-select="${id}" role="button" tabindex="0">${label}</span><span class="side-menu-item-actions">${noteLockButton}<input type="checkbox" data-panel-toggle="${id}" aria-label="${t("notesShowHideButton")}" title="${t("notesShowHideButton")}" ${checked?"checked":""}>${noteDeleteButton}</span></div>`
  }
 const notesPanels=draggables
  .filter(panel=>isNotesPanelId(panel.dataset.dragId))
  .sort((a,b)=>(Number(a.dataset.noteIndex)||0)-(Number(b.dataset.noteIndex)||0))
  const allNotesVisible=notesPanels.length>0 && notesPanels.every(panel=>!panel.classList.contains("panel-hidden"))
+ const canRemoveNotes=notesItems.length>MIN_NOTES_PANELS && notesPanels.some((_,index)=>!notesItemLocks[index])
  const notesToggleAllCheckbox=`<input class="side-menu-note-toggle-all" type="checkbox" data-notes-toggle-all aria-label="${t("notesToggleAll")}" title="${t("notesShowHideButton")}" ${allNotesVisible?"checked":""} ${notesPanels.length ? "" : "disabled"}>`
 const otherPanels=draggables.filter(panel=>!isNotesPanelId(panel.dataset.dragId))
 const otherPanelsHtml=otherPanels.map(renderPanelItem).join("")
 const notesItemsHtml=notesPanels.map(renderPanelItem).join("")
- const notesHeaderControls=`<span class="side-menu-note-controls"><button class="side-menu-note-btn" type="button" data-notes-action="remove" ${notesItems.length<=MIN_NOTES_PANELS?"disabled":""}>-</button><span class="side-menu-note-count">${notesItems.length}</span><button class="side-menu-note-btn" type="button" data-notes-action="add" ${notesItems.length>=MAX_NOTES_PANELS?"disabled":""}>+</button>${notesToggleAllCheckbox}</span>`
+ const notesHeaderControls=`<span class="side-menu-note-controls"><button class="side-menu-note-btn" type="button" data-notes-action="remove" ${canRemoveNotes?"":"disabled"}>-</button><span class="side-menu-note-count">${notesItems.length}</span><button class="side-menu-note-btn" type="button" data-notes-action="add" ${notesItems.length>=MAX_NOTES_PANELS?"disabled":""}>+</button>${notesToggleAllCheckbox}</span>`
  const notesGroupClassSuffix=`${isNotesGroupCollapsed?" is-collapsed":""}${(!isNotesGroupCollapsed && shouldAnimateNotesGroupOpen)?" is-opening":""}`
  const notesGroupHtml=`<div class="side-menu-group${notesGroupClassSuffix}" data-notes-group><div class="side-menu-group-header"><button class="side-menu-group-title-btn" type="button" data-notes-group-toggle aria-expanded="${isNotesGroupCollapsed?"false":"true"}">${t("notesGroup")}</button>${notesHeaderControls}</div><div class="side-menu-group-items">${notesItemsHtml}</div></div>`
  sideMenuList.innerHTML=`${otherPanelsHtml}${notesGroupHtml}`
@@ -6376,6 +6442,18 @@ function changeNotesPanelCount(delta){
    localStorage.setItem(NOTES_GROUP_COLLAPSED_KEY,"0")
    shouldAnimateNotesGroupOpen=true
   }
+  if(delta<0){
+   let removableIndex=-1
+   for(let i=notesItemLocks.length-1;i>=0;i-=1){
+    if(!notesItemLocks[i]){
+     removableIndex=i
+     break
+    }
+   }
+   if(removableIndex<0) return
+   removeNotesPanelByIndex(removableIndex,{allowLockedDelete:true})
+   return
+  }
   syncNotesPanels(nextCount)
   savePositions()
   renderSideMenuList()
@@ -6392,6 +6470,14 @@ function setAllNotesPanelsVisibility(shouldShow){
   }
  })
  savePositions()
+ renderSideMenuList()
+}
+
+function toggleNoteDeleteLock(noteIndex){
+ const index=Math.max(0,Math.min(notesItems.length-1,Math.floor(Number(noteIndex)||0)))
+ if(index<0 || index>=notesItems.length) return
+ notesItemLocks[index]=!notesItemLocks[index]
+ saveNotesItemLocks()
  renderSideMenuList()
 }
 
@@ -6821,6 +6907,16 @@ if(sideMenuList){
  })
 
  sideMenuList.addEventListener("click",(e)=>{
+  const noteLockBtn=e.target.closest("[data-note-lock]")
+  if(noteLockBtn){
+   e.preventDefault()
+   e.stopPropagation()
+   const noteIndex=parseInt(noteLockBtn.dataset.noteLock,10)
+   commitUndoableChange(()=>{
+    toggleNoteDeleteLock(noteIndex)
+   })
+   return
+  }
   const noteDeleteBtn=e.target.closest("[data-note-delete]")
   if(noteDeleteBtn){
    if(noteDeleteBtn.disabled) return

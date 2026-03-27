@@ -397,6 +397,7 @@ letter-spacing:0;
 }
 
 .side-menu-note-btn,
+.side-menu-note-lock-btn,
 .side-menu-item input,
 .side-menu-note-toggle-all{
 accent-color:#2cda6e;
@@ -419,7 +420,59 @@ line-height:1;
 cursor:pointer;
 }
 
+.side-menu-note-lock-btn{
+display:inline-flex;
+align-items:center;
+justify-content:center;
+padding:0;
+border:1px solid #2b3139;
+border-radius:3px;
+background:#0b0e11;
+color:#7d8590;
+cursor:pointer;
+}
+
+.side-menu-note-lock-btn.is-locked{
+border-color:#2cda6e;
+background:#153a28;
+color:#2cda6e;
+}
+
+.side-menu-note-lock-icon{
+position:relative;
+display:block;
+width:8px;
+height:6px;
+border:1.5px solid currentColor;
+border-radius:1px;
+box-sizing:border-box;
+}
+
+.side-menu-note-lock-icon::before{
+content:"";
+position:absolute;
+left:50%;
+top:-5px;
+width:6px;
+height:5px;
+border:1.5px solid currentColor;
+border-bottom:none;
+border-radius:6px 6px 0 0;
+box-sizing:border-box;
+transform:translateX(-50%);
+}
+
+.side-menu-note-lock-btn:not(.is-locked) .side-menu-note-lock-icon::before{
+transform:translateX(-50%) rotate(-22deg);
+transform-origin:1px 100%;
+}
+
 .side-menu-note-btn:disabled{
+opacity:0.35;
+cursor:default;
+}
+
+.side-menu-note-lock-btn:disabled{
 opacity:0.35;
 cursor:default;
 }
@@ -1325,12 +1378,16 @@ text-align:center;
 }
 
 .donation-actions{
-grid-template-columns:minmax(0,1fr);
+display:flex;
+justify-content:center;
 margin-top:16px;
 }
 
 .donation-actions button{
 text-transform:none;
+width:50%;
+min-width:0;
+max-width:none;
 }
 
 .confirm-actions .confirm-yes{
