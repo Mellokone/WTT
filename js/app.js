@@ -1,5 +1,5 @@
 
-const APP_VERSION="1.701"
+const APP_VERSION="1.713"
 const DONATION_ERC20_ADDRESS="0x1E7333A8a912cA3a39Fe3699405AF523Ed2c2058"
 const DONATION_PAYPAL_EMAIL="mellok@ukr.net"
 const LANGUAGE_KEY="uiLanguageV1"
@@ -23,6 +23,19 @@ const I18N={
   cloudLoaded:"Дані завантажено з хмари",
   cloudNoData:"У хмарі ще немає даних",
   cloudAuthFailed:"Помилка входу через Google",
+  authSignInTitle:"Sign in",
+  authEmailLabel:"Email address",
+  authPasswordLabel:"Password",
+  authContinue:"Continue",
+  authForgotPassword:"Forgot password",
+  authGoogleButton:"Sign in with Google",
+  authEmailRequired:"Введіть email address",
+  authEmailInvalid:"Некоректний email address",
+  authPasswordRequired:"Введіть password",
+  authInvalidCredentials:"Невірний email або password",
+  authTooManyRequests:"Забагато спроб входу. Спробуйте пізніше",
+  authResetSent:"Лист для відновлення пароля надіслано",
+  authResetFailed:"Не вдалося надіслати лист для відновлення",
   menu:"МЕНЮ",
   languageAria:"Мова",
   languageUkrainian:"УКР",
@@ -138,7 +151,7 @@ const I18N={
   statusDataLoaded:"Дані успішно завантажено",
   statusLoadFailed:"Не вдалося завантажити файл або невірний пароль",
   creatorInfoLabel:"Інформація про автора",
-  creatorName:"Olexandr Skorobagatko",
+  creatorName:"OLEXANDR SKOROBAGATKO",
   creatorSupportMessage:"If you like my product, feel free to donate any amount.",
   creatorCryptoLabel:"ERC-20:",
   creatorPaypalLabel:"PayPal:",
@@ -165,6 +178,19 @@ const I18N={
   cloudLoaded:"Cloud data loaded",
   cloudNoData:"No cloud data yet",
   cloudAuthFailed:"Google sign-in failed",
+  authSignInTitle:"Sign in",
+  authEmailLabel:"Email address",
+  authPasswordLabel:"Password",
+  authContinue:"Continue",
+  authForgotPassword:"Forgot password",
+  authGoogleButton:"Sign in with Google",
+  authEmailRequired:"Enter email address",
+  authEmailInvalid:"Invalid email address",
+  authPasswordRequired:"Enter password",
+  authInvalidCredentials:"Invalid email or password",
+  authTooManyRequests:"Too many sign-in attempts. Try again later",
+  authResetSent:"Password reset email sent",
+  authResetFailed:"Failed to send password reset email",
   menu:"MENU",
   languageAria:"Language",
   languageUkrainian:"УКР",
@@ -280,7 +306,7 @@ const I18N={
   statusDataLoaded:"Data loaded successfully",
   statusLoadFailed:"Failed to load file or wrong password",
   creatorInfoLabel:"Creator info",
-  creatorName:"Olexandr Skorobagatko",
+  creatorName:"OLEXANDR SKOROBAGATKO",
   creatorSupportMessage:"If you like my product, feel free to donate any amount.",
   creatorCryptoLabel:"ERC-20:",
   creatorPaypalLabel:"PayPal:",
@@ -381,7 +407,7 @@ function setCloudStatus(messageKey,vars={},type=""){
 function updateCloudControls(){
  if(googleAuthBtn){
   const authLabel=cloudUser ? t("googleSignOut") : t("googleSignIn")
-  googleAuthBtn.disabled=cloudSyncInFlight
+  googleAuthBtn.disabled=cloudSyncInFlight || authDialogBusy
   googleAuthBtn.innerText=authLabel
   googleAuthBtn.setAttribute("aria-label",authLabel)
   googleAuthBtn.title=authLabel
@@ -454,6 +480,92 @@ function isPopupAuthFallbackError(error){
   || code==="auth/cancelled-popup-request"
 }
 
+function setAuthDialogBusy(isBusy){
+ authDialogBusy=!!isBusy
+ if(authEmailInput) authEmailInput.disabled=authDialogBusy
+ if(authPasswordInput) authPasswordInput.disabled=authDialogBusy
+ if(authContinueBtn) authContinueBtn.disabled=authDialogBusy
+ if(authForgotBtn) authForgotBtn.disabled=authDialogBusy
+ if(authGoogleBtn) authGoogleBtn.disabled=authDialogBusy
+ updateCloudControls()
+}
+
+function setAuthDialogError(message="",type="error"){
+ if(!authErrorEl) return
+ authErrorEl.innerText=message || ""
+ authErrorEl.classList.remove("success","error")
+ if(!message) return
+ authErrorEl.classList.add(type==="success" ? "success" : "error")
+}
+
+function setAuthScreenOpen(isOpen){
+ if(!authScreen) return
+ isAuthScreenOpen=!!isOpen
+ authScreen.classList.toggle("open",isAuthScreenOpen)
+ if(isAuthScreenOpen){
+  setSideMenuOpen(false)
+  setAuthDialogError("")
+  if(authPasswordInput) authPasswordInput.value=""
+  requestAnimationFrame(()=>{
+   if(authEmailInput && !authDialogBusy) authEmailInput.focus()
+  })
+  return
+ }
+ setAuthDialogBusy(false)
+ setAuthDialogError("")
+ if(authPasswordInput) authPasswordInput.value=""
+}
+
+function getAuthErrorMessage(error){
+ const code=String(error?.code || "")
+ if(code==="auth/invalid-email") return t("authEmailInvalid")
+ if(code==="auth/missing-password") return t("authPasswordRequired")
+ if(code==="auth/user-not-found" || code==="auth/wrong-password" || code==="auth/invalid-credential") return t("authInvalidCredentials")
+ if(code==="auth/too-many-requests") return t("authTooManyRequests")
+ return t("cloudAuthFailed")
+}
+
+async function signInWithGoogleFlow({fromDialog=false}={}){
+ if(!cloudFirebaseReady || !cloudAuth){
+  setCloudStatus("cloudNotConfigured",{},"error")
+  setSideMenuStatus(t("cloudNotConfigured"),"error")
+  showStatusToast(t("cloudNotConfigured"))
+  if(fromDialog) setAuthDialogError(t("cloudNotConfigured"),"error")
+  return false
+ }
+ try{
+  const provider=new firebase.auth.GoogleAuthProvider()
+  provider.setCustomParameters({prompt:"select_account"})
+  await cloudAuth.signInWithPopup(provider)
+  if(fromDialog) setAuthScreenOpen(false)
+  return true
+ }catch(error){
+  if(isPopupAuthFallbackError(error)){
+   try{
+    const provider=new firebase.auth.GoogleAuthProvider()
+    provider.setCustomParameters({prompt:"select_account"})
+    if(fromDialog) setAuthScreenOpen(false)
+    await cloudAuth.signInWithRedirect(provider)
+    return true
+   }catch(redirectError){
+    error=redirectError
+   }
+  }
+  setCloudStatus("cloudAuthFailed",{},"error")
+  const errorCode=String(error?.code || "")
+  if(errorCode){
+   setSideMenuStatus(`${t("cloudAuthFailed")}: ${errorCode}`,"error")
+  }else{
+   setSideMenuStatus(t("cloudAuthFailed"),"error")
+  }
+  showStatusToast(t("cloudAuthFailed"))
+  if(fromDialog){
+   setAuthDialogError(getAuthErrorMessage(error),"error")
+  }
+  return false
+ }
+}
+
 async function loadCloudState(){
  if(!cloudFirebaseReady || !cloudDb || !cloudUser) return
  try{
@@ -482,40 +594,17 @@ function initCloudSync(){
  if(googleAuthBtn && !googleAuthBtn.dataset.cloudBound){
   googleAuthBtn.dataset.cloudBound="1"
   googleAuthBtn.addEventListener("click",async ()=>{
-   if(cloudSyncInFlight) return
-   if(!cloudFirebaseReady || !cloudAuth){
-    setCloudStatus("cloudNotConfigured",{},"error")
-    setSideMenuStatus(t("cloudNotConfigured"),"error")
-    showStatusToast(t("cloudNotConfigured"))
-    return
-   }
+   if(cloudSyncInFlight || authDialogBusy) return
    if(cloudUser){
     await cloudAuth.signOut()
+    performResetTrades()
     return
    }
-   try{
-    const provider=new firebase.auth.GoogleAuthProvider()
-    provider.setCustomParameters({prompt:"select_account"})
-    await cloudAuth.signInWithPopup(provider)
-   }catch(error){
-    if(isPopupAuthFallbackError(error)){
-     try{
-      const provider=new firebase.auth.GoogleAuthProvider()
-      provider.setCustomParameters({prompt:"select_account"})
-      await cloudAuth.signInWithRedirect(provider)
-      return
-     }catch(redirectError){
-      error=redirectError
-     }
-    }
-    setCloudStatus("cloudAuthFailed",{},"error")
-    const errorCode=String(error?.code || "")
-    if(errorCode){
-     setSideMenuStatus(`${t("cloudAuthFailed")}: ${errorCode}`,"error")
-    }else{
-     setSideMenuStatus(t("cloudAuthFailed"),"error")
-    }
-    showStatusToast(t("cloudAuthFailed"))
+   setAuthScreenOpen(true)
+   if(!cloudFirebaseReady || !cloudAuth){
+    setAuthDialogError(t("cloudNotConfigured"),"error")
+   }else{
+    setAuthDialogError("")
    }
   })
  }
@@ -551,7 +640,8 @@ function initCloudSync(){
  cloudAuth.onAuthStateChanged(async (user)=>{
   cloudUser=user || null
   updateCloudControls()
-  if(cloudUser){
+ if(cloudUser){
+   setAuthScreenOpen(false)
    setCloudStatus("cloudSignedIn",{email:cloudUser.email || cloudUser.displayName || "Google"},"success")
    await loadCloudState()
   }else{
@@ -2062,13 +2152,29 @@ function formatDayStartValue(value){
  return value % 1 === 0 ? String(value) : value.toFixed(2)
 }
 
+function getDefaultNewTradeDateKey(sourceDayIndex=activeDayIndex){
+ const safeIndex=Math.max(0,Math.floor(Number(sourceDayIndex) || 0))
+ const sourceDate=isValidPnlDateKey(tradeCaptureDates[safeIndex]) ? tradeCaptureDates[safeIndex] : ""
+ if(sourceDate) return sourceDate
+ const monthInfo=getMonthInfoFromMonthKey(totalsMonthFilterKey)
+ if(monthInfo){
+  const todayDay=(new Date()).getDate()
+  const safeDay=Math.max(1,Math.min(monthInfo.daysInMonth,todayDay))
+  return getDateKeyForMonthDay(monthInfo.year,monthInfo.monthIndex,safeDay)
+ }
+ return getLocalDateKey()
+}
+
 function addNewDaySession(){
  normalizeDaySessions()
  updateTotals()
+ const sourceIndex=Math.max(0,Math.min(daySessions.length-1,Math.floor(Number(activeDayIndex) || 0)))
  const nextStartValue=formatDayStartValue(latestEndingDeposit)
  daySessions.push(createEmptyDaySession(nextStartValue,NEW_TRADE_INITIAL_ROWS))
  while(totalHistory.length<daySessions.length) totalHistory.push(null)
- while(tradeCaptureDates.length<daySessions.length) tradeCaptureDates.push(null)
+ while(tradeCaptureDates.length<daySessions.length){
+  tradeCaptureDates.push(getDefaultNewTradeDateKey(sourceIndex))
+ }
  activeDayIndex=daySessions.length-1
  saveTotalHistory()
  savePnlCaptureDates()
@@ -2440,7 +2546,7 @@ function initMarginBasicCalculatorKeyboard(){
  if(document.body.dataset.marginCalcKeyboardReady==="1") return
  document.body.dataset.marginCalcKeyboardReady="1"
 document.addEventListener("keydown",(e)=>{
-  if(isLocked || isResetConfirmOpen || isDonationScreenOpen) return
+  if(isLocked || isResetConfirmOpen || isDonationScreenOpen || isAuthScreenOpen) return
   if(!marginFlipped) return
   if(!marginPanel || marginPanel.classList.contains("panel-hidden") || marginPanel.classList.contains("collapsed")) return
   const target=e.target
@@ -3170,7 +3276,12 @@ function buildRows(){
 function syncTrackerWithTotalsMonthFilter(){
  const visibleDayIndices=getTrackerVisibleDayIndices()
  if(totalsMonthFilterKey && visibleDayIndices.length>0 && !visibleDayIndices.includes(activeDayIndex)){
-  loadDay(visibleDayIndices[0])
+  const safeActive=Math.max(0,Math.floor(Number(activeDayIndex) || 0))
+  const lowerOrEqual=visibleDayIndices.filter(index=>index<=safeActive)
+  const nextIndex=lowerOrEqual.length
+   ? lowerOrEqual[lowerOrEqual.length-1]
+   : visibleDayIndices[0]
+  loadDay(nextIndex)
   return
  }
  renderDayTabs()
@@ -4366,24 +4477,29 @@ if(captureTotalBtn){
   commitUndoableChange(()=>{
    saveCurrentDayState()
    normalizeDaySessions()
-   const capturedDayIndex=Math.max(0,Math.min(daySessions.length-1,Math.floor(Number(activeDayIndex) || 0)))
-   const hadCapturedBefore=totalHistory[capturedDayIndex]!==null && totalHistory[capturedDayIndex]!==undefined
-   const existingCaptureDate=tradeCaptureDates[capturedDayIndex]
-   const captureDate=isValidPnlDateKey(existingCaptureDate) ? existingCaptureDate : getLocalDateKey()
-   const visibleBeforeCapture=getTrackerVisibleDayIndices()
-   const isLastVisibleInFilteredMonth=totalsMonthFilterKey
-    ? (visibleBeforeCapture.length>0 && capturedDayIndex===visibleBeforeCapture[visibleBeforeCapture.length-1])
-    : false
-   const shouldAppendDaySession=!hadCapturedBefore && (capturedDayIndex===daySessions.length-1 || isLastVisibleInFilteredMonth)
-   totalHistory[capturedDayIndex]=latestWeeklyProfit
-   tradeCaptureDates[capturedDayIndex]=captureDate
-   if(shouldAppendDaySession){
-    const nextStartValue=formatDayStartValue(latestEndingDeposit)
-    daySessions.push(createEmptyDaySession(nextStartValue,NEW_TRADE_INITIAL_ROWS))
-    tradeCaptureDates.push(null)
-   }
-   while(totalHistory.length<daySessions.length) totalHistory.push(null)
-   const nextActiveIndex=hadCapturedBefore ? capturedDayIndex : Math.min(capturedDayIndex+1,daySessions.length-1)
+  const capturedDayIndex=Math.max(0,Math.min(daySessions.length-1,Math.floor(Number(activeDayIndex) || 0)))
+  const hadCapturedBefore=totalHistory[capturedDayIndex]!==null && totalHistory[capturedDayIndex]!==undefined
+  const existingCaptureDate=tradeCaptureDates[capturedDayIndex]
+  const captureDate=hadCapturedBefore
+   ? (isValidPnlDateKey(existingCaptureDate) ? existingCaptureDate : getLocalDateKey())
+   : getLocalDateKey()
+  const visibleDayIndices=getTrackerVisibleDayIndices()
+  const lastVisibleDayIndex=visibleDayIndices.length
+   ? visibleDayIndices[visibleDayIndices.length-1]
+   : (daySessions.length-1)
+  const shouldAppendDaySession=!hadCapturedBefore && capturedDayIndex===lastVisibleDayIndex
+  totalHistory[capturedDayIndex]=latestWeeklyProfit
+  tradeCaptureDates[capturedDayIndex]=captureDate
+  if(shouldAppendDaySession){
+   const nextStartValue=formatDayStartValue(latestEndingDeposit)
+   daySessions.push(createEmptyDaySession(nextStartValue,NEW_TRADE_INITIAL_ROWS))
+   tradeCaptureDates.push(captureDate)
+   totalsMonthFilterKey=String(captureDate).slice(0,7)
+  }
+  while(totalHistory.length<daySessions.length) totalHistory.push(null)
+  const nextActiveIndex=shouldAppendDaySession
+   ? (daySessions.length-1)
+   : capturedDayIndex
    activeDayIndex=nextActiveIndex
    saveTotalHistory()
    saveDaySessions()
@@ -4539,7 +4655,18 @@ const cloudSyncBtn=document.getElementById("cloudSyncBtn")
 const cloudAuthStatusEl=document.getElementById("cloudAuthStatus")
 const menuEdgeLabelEl=document.getElementById("menuEdgeLabel")
 const lockBtnTop=document.getElementById("lockBtnTop")
-const resetBtnTop=document.getElementById("resetBtnTop")
+const authScreen=document.getElementById("authScreen")
+const authForm=document.getElementById("authForm")
+const authTitleEl=document.getElementById("authTitle")
+const authEmailLabelEl=document.getElementById("authEmailLabel")
+const authEmailInput=document.getElementById("authEmailInput")
+const authPasswordLabelEl=document.getElementById("authPasswordLabel")
+const authPasswordInput=document.getElementById("authPasswordInput")
+const authContinueBtn=document.getElementById("authContinueBtn")
+const authForgotBtn=document.getElementById("authForgotBtn")
+const authGoogleBtn=document.getElementById("authGoogleBtn")
+const authGoogleLabelEl=document.getElementById("authGoogleLabel")
+const authErrorEl=document.getElementById("authError")
 const lockScreen=document.getElementById("lockScreen")
 const lockForm=document.getElementById("lockForm")
 const lockTitleEl=document.getElementById("lockTitle")
@@ -4596,6 +4723,7 @@ let notesSpellcheckEnabled=localStorage.getItem(NOTES_SPELLCHECK_KEY)!=="0"
 let isLocked=false
 let isResetConfirmOpen=false
 let isDonationScreenOpen=false
+let isAuthScreenOpen=false
 let lockViewSnapshot=""
 let lockPasswordVerifier=localStorage.getItem(LOCK_PASSWORD_VERIFIER_KEY) || ""
 let lockFailedAttempts=Math.max(0,parseInt(localStorage.getItem(LOCK_FAILED_ATTEMPTS_KEY) || "0",10) || 0)
@@ -4631,6 +4759,7 @@ let cloudSyncInFlight=false
 let cloudPendingSync=false
 let lastCloudSyncedSnapshot=""
 let cloudSyncTimer=null
+let authDialogBusy=false
 
 function setCaptureButtonText(){
  if(!captureTotalBtn) return
@@ -4656,7 +4785,7 @@ function applyLanguage(){
  if(loadDataBtn) loadDataBtn.innerText=t("loadData")
  if(saveDataBtn) saveDataBtn.innerText=t("saveData")
  if(creatorInfoBtn){
-  creatorInfoBtn.innerText="© Created by Olexandr Skorobagatko. Ukraine. 2026"
+  creatorInfoBtn.innerText="© Created by OLEXANDR SKOROBAGATKO. Ukraine. 2026"
   creatorInfoBtn.setAttribute("aria-label",t("creatorInfoLabel"))
   creatorInfoBtn.title=t("creatorInfoLabel")
  }
@@ -4672,6 +4801,32 @@ function applyLanguage(){
   donationCloseBtn.innerText=t("creatorThanks")
   donationCloseBtn.setAttribute("aria-label",t("creatorThanks"))
   donationCloseBtn.title=t("creatorThanks")
+ }
+ if(authTitleEl) authTitleEl.innerText=t("authSignInTitle")
+ if(authEmailLabelEl) authEmailLabelEl.innerText=t("authEmailLabel")
+ if(authPasswordLabelEl) authPasswordLabelEl.innerText=t("authPasswordLabel")
+ if(authContinueBtn){
+  authContinueBtn.innerText=t("authContinue")
+  authContinueBtn.setAttribute("aria-label",t("authContinue"))
+  authContinueBtn.title=t("authContinue")
+ }
+ if(authForgotBtn){
+  authForgotBtn.innerText=t("authForgotPassword")
+  authForgotBtn.setAttribute("aria-label",t("authForgotPassword"))
+  authForgotBtn.title=t("authForgotPassword")
+ }
+ if(authGoogleBtn){
+  authGoogleBtn.setAttribute("aria-label",t("authGoogleButton"))
+  authGoogleBtn.title=t("authGoogleButton")
+ }
+ if(authGoogleLabelEl) authGoogleLabelEl.innerText=t("authGoogleButton")
+ if(authEmailInput){
+  authEmailInput.placeholder=t("authEmailLabel")
+  authEmailInput.setAttribute("aria-label",t("authEmailLabel"))
+ }
+ if(authPasswordInput){
+  authPasswordInput.placeholder=t("authPasswordLabel")
+  authPasswordInput.setAttribute("aria-label",t("authPasswordLabel"))
  }
  if(lockTitleEl) lockTitleEl.innerText=t("lockTitle")
  if(lockUnlockBtn) lockUnlockBtn.innerText=t("unlock")
@@ -4752,10 +4907,6 @@ if(dayTabsNextBtn){
  if(pinBtn){
   pinBtn.setAttribute("aria-label",t("pinWindows"))
   pinBtn.title=t("pinWindows")
- }
- if(resetBtnTop){
-  resetBtnTop.setAttribute("aria-label",t("resetTrades"))
-  resetBtnTop.title=t("resetTrades")
  }
  if(lockPasswordInput){
   lockPasswordInput.setAttribute("aria-label",t("lockTitle"))
@@ -5848,9 +5999,9 @@ function layoutPanelsInRows(){
 function initPanelSelection(){
  if(!layoutEl || !panelSelectionBox) return
 
- document.addEventListener("pointerdown",(e)=>{
- if(e.button!==0) return
-  if(isLocked || isResetConfirmOpen || isDonationScreenOpen || spaceDragMode) return
+document.addEventListener("pointerdown",(e)=>{
+if(e.button!==0) return
+  if(isLocked || isResetConfirmOpen || isDonationScreenOpen || isAuthScreenOpen || spaceDragMode) return
   if(sideMenu?.classList.contains("open")) return
   if(!isPanelSelectionBackgroundTarget(e.target)) return
  panelSelectionState={
@@ -6105,7 +6256,7 @@ function showWindowScaleToast(){
 function initWindowScaleShortcut(){
 document.addEventListener("wheel",(e)=>{
  if(!(e.ctrlKey || e.metaKey)) return
-  if(isLocked || isResetConfirmOpen || isDonationScreenOpen) return
+  if(isLocked || isResetConfirmOpen || isDonationScreenOpen || isAuthScreenOpen) return
   e.preventDefault()
   const direction=e.deltaY<0 ? 1 : -1
   const nextScale=clampWindowScale(windowsScale + (direction*WINDOW_SCALE_STEP))
@@ -6392,9 +6543,103 @@ if(sideMenuOverlay){
  })
 }
 
+if(authScreen){
+ authScreen.addEventListener("click",(e)=>{
+  if(e.target!==authScreen) return
+  if(authDialogBusy) return
+  setAuthScreenOpen(false)
+ })
+}
+
+if(authForm){
+ authForm.addEventListener("submit",async (e)=>{
+  e.preventDefault()
+  if(authDialogBusy) return
+  const email=String(authEmailInput?.value || "").trim()
+  const password=String(authPasswordInput?.value || "")
+  if(!email){
+   setAuthDialogError(t("authEmailRequired"),"error")
+   if(authEmailInput) authEmailInput.focus()
+   return
+  }
+  if(!password){
+   setAuthDialogError(t("authPasswordRequired"),"error")
+   if(authPasswordInput) authPasswordInput.focus()
+   return
+  }
+  if(!cloudFirebaseReady || !cloudAuth){
+   setCloudStatus("cloudNotConfigured",{},"error")
+   setSideMenuStatus(t("cloudNotConfigured"),"error")
+   setAuthDialogError(t("cloudNotConfigured"),"error")
+   return
+  }
+  setAuthDialogBusy(true)
+  try{
+   await cloudAuth.signInWithEmailAndPassword(email,password)
+   setAuthDialogError("")
+   setAuthScreenOpen(false)
+  }catch(error){
+   setAuthDialogError(getAuthErrorMessage(error),"error")
+   const errorCode=String(error?.code || "")
+   if(errorCode){
+    setSideMenuStatus(`${t("cloudAuthFailed")}: ${errorCode}`,"error")
+   }else{
+    setSideMenuStatus(t("cloudAuthFailed"),"error")
+   }
+  }finally{
+   setAuthDialogBusy(false)
+  }
+ })
+}
+
+if(authForgotBtn){
+ authForgotBtn.addEventListener("click",async ()=>{
+  if(authDialogBusy) return
+  const email=String(authEmailInput?.value || "").trim()
+  if(!email){
+   setAuthDialogError(t("authEmailRequired"),"error")
+   if(authEmailInput) authEmailInput.focus()
+   return
+  }
+  if(!cloudFirebaseReady || !cloudAuth){
+   setCloudStatus("cloudNotConfigured",{},"error")
+   setSideMenuStatus(t("cloudNotConfigured"),"error")
+   setAuthDialogError(t("cloudNotConfigured"),"error")
+   return
+  }
+  setAuthDialogBusy(true)
+  try{
+   await cloudAuth.sendPasswordResetEmail(email)
+   setAuthDialogError(t("authResetSent"),"success")
+   showStatusToast(t("authResetSent"))
+  }catch(error){
+   const code=String(error?.code || "")
+   if(code==="auth/invalid-email"){
+    setAuthDialogError(t("authEmailInvalid"),"error")
+   }else{
+    setAuthDialogError(t("authResetFailed"),"error")
+   }
+  }finally{
+   setAuthDialogBusy(false)
+  }
+ })
+}
+
+if(authGoogleBtn){
+ authGoogleBtn.addEventListener("click",async ()=>{
+  if(authDialogBusy) return
+  setAuthDialogBusy(true)
+  try{
+   await signInWithGoogleFlow({fromDialog:true})
+  }finally{
+   setAuthDialogBusy(false)
+  }
+ })
+}
+
 if(creatorInfoBtn){
  creatorInfoBtn.addEventListener("click",()=>{
-  if(isLocked || isResetConfirmOpen || isDonationScreenOpen) return
+  if(isLocked || isResetConfirmOpen || isDonationScreenOpen || isAuthScreenOpen) return
   setDonationScreenOpen(true)
  })
 }
@@ -6476,6 +6721,7 @@ if(donationScreen){
 document.addEventListener("pointermove",(e)=>{
  if(isResetConfirmOpen) return
  if(isDonationScreenOpen) return
+ if(isAuthScreenOpen) return
  if(isLocked) return
  if(sideMenu?.classList.contains("open")){
   return
@@ -6624,7 +6870,7 @@ sideMenuList.addEventListener("change",(e)=>{
 }
 
 async function triggerSaveData(){
- if(isLocked || isResetConfirmOpen || isDonationScreenOpen) return
+ if(isLocked || isResetConfirmOpen || isDonationScreenOpen || isAuthScreenOpen) return
  try{
   const password=window.prompt(t("promptEncryptPassword"))
   if(password===null) return
@@ -6671,7 +6917,7 @@ if(saveDataBtn){
 
 if(loadDataBtn && loadDataInput){
  loadDataBtn.addEventListener("click",()=>{
-  if(isLocked || isResetConfirmOpen || isDonationScreenOpen) return
+  if(isLocked || isResetConfirmOpen || isDonationScreenOpen || isAuthScreenOpen) return
   loadDataInput.value=""
   loadDataInput.click()
  })
@@ -8220,16 +8466,21 @@ function initUndoShortcut(){
  }
 
  document.addEventListener("keydown",(e)=>{
-  if(isResetConfirmOpen && e.code==="Escape"){
-   setResetConfirmOpen(false)
+ if(isResetConfirmOpen && e.code==="Escape"){
+  setResetConfirmOpen(false)
+  return
+ }
+ if(isDonationScreenOpen && e.code==="Escape"){
+  setDonationScreenOpen(false)
+  return
+ }
+  if(isAuthScreenOpen && e.code==="Escape"){
+   setAuthScreenOpen(false)
    return
   }
-  if(isDonationScreenOpen && e.code==="Escape"){
-   setDonationScreenOpen(false)
-   return
-  }
-  if(isResetConfirmOpen) return
-  if(isDonationScreenOpen) return
+ if(isResetConfirmOpen) return
+ if(isDonationScreenOpen) return
+  if(isAuthScreenOpen) return
   if(isLocked && e.code!=="Escape") return
   if(e.code==="Delete"){
    if(isTypingTarget(e.target)) return
@@ -8391,8 +8642,8 @@ function initKeyboardPanelNudge(){
  }
 
 document.addEventListener("keydown",(e)=>{
- if(!ARROW_KEYS.has(e.key)) return
-  if(isLocked || isResetConfirmOpen || isDonationScreenOpen || isPinned) return
+if(!ARROW_KEYS.has(e.key)) return
+  if(isLocked || isResetConfirmOpen || isDonationScreenOpen || isAuthScreenOpen || isPinned) return
  if(e.ctrlKey || e.metaKey || e.altKey) return
   if(isTypingTarget(e.target)) return
   refreshDraggables()
@@ -8559,7 +8810,7 @@ function bindCollapseButton(btn){
 if(panel.dataset.collapseDblReady!=="1"){
   panel.dataset.collapseDblReady="1"
 panel.addEventListener("dblclick",(e)=>{
-  if(isLocked || isResetConfirmOpen || isDonationScreenOpen) return
+  if(isLocked || isResetConfirmOpen || isDonationScreenOpen || isAuthScreenOpen) return
   if(!panel.classList.contains("collapsed")) return
   const iconEl=panel.querySelector(".panel-collapsed-icon")
   if(!iconEl) return

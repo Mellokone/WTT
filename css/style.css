@@ -1,4 +1,4 @@
-
+<style>
 :root{
   --calc-width:100%;
 }
@@ -104,7 +104,7 @@ margin-left:auto;
  pointer-events:none;
  opacity:0;
  transition:opacity 0.16s ease;
- z-index:90;
+ z-index:9999;
 }
 
 .status-toast.visible{
@@ -194,14 +194,9 @@ cursor:pointer;
 outline:none;
 }
 
-.topbar .btn.reset-top{
+.topbar .btn.lock-top{
 background:#da2c51;
 color:#fff;
-}
-
-.topbar .btn.lock-top{
-background:#2cda6e;
-color:#0b0e11;
 }
 
 #pinBtn{
@@ -529,26 +524,29 @@ gap:8px;
 margin-top:16px;
 }
 
-.side-menu-actions button,
-.side-menu-cloud button{
+.side-menu-actions button{
 height:36px;
-border:none;
+border:1px solid #2b3139;
 border-radius:6px;
-background:#2b3139;
+background:#181a20;
 color:#eaecef;
 font-size:12px;
-letter-spacing:0.4px;
+letter-spacing:0.2px;
 text-transform:uppercase;
-font-weight:600;
+font-weight:700;
+font-family:Consolas,"Courier New",monospace;
 cursor:pointer;
+transition:background-color 0.18s ease,border-color 0.18s ease,color 0.18s ease;
 }
 
-.side-menu-actions .save-data-btn{
+.side-menu-actions button:hover{
+background:#181a20;
+border-color:#2cda6e;
 color:#2cda6e;
 }
 
-.side-menu-actions .load-data-btn{
-color:#eaecef;
+.side-menu-actions button:active{
+transform:translateY(1px);
 }
 
 .side-menu-status{
@@ -571,7 +569,7 @@ color:#da2c51;
 .side-menu-cloud{
 display:flex;
 flex-direction:column;
-gap:8px;
+gap:0;
 margin-top:10px;
 }
 
@@ -869,6 +867,165 @@ text-align:center;
 color:#da2c51;
 font-size:10px;
 letter-spacing:0.3px;
+}
+
+.auth-screen{
+z-index:126;
+}
+
+.auth-card{
+width:360px;
+text-align:left;
+}
+
+.auth-title{
+margin:0 0 14px 0;
+text-align:center;
+color:#2cda6e;
+font-size:11px;
+letter-spacing:0.5px;
+text-transform:uppercase;
+font-weight:600;
+}
+
+.auth-label{
+margin:0 0 2px 0;
+}
+
+.auth-input{
+margin:2px 0 8px 0;
+}
+
+.auth-continue-btn{
+margin-top:6px;
+}
+
+.auth-link-btn{
+width:100%;
+margin:6px 0 0 0;
+padding:0;
+height:22px;
+border:none;
+background:transparent;
+color:#8a939f;
+font-size:10px;
+letter-spacing:0.35px;
+text-transform:uppercase;
+font-weight:600;
+cursor:pointer;
+}
+
+.auth-link-btn:hover{
+color:#2cda6e;
+}
+
+.auth-link-btn:disabled{
+opacity:0.5;
+cursor:not-allowed;
+}
+
+.auth-error{
+min-height:16px;
+margin-top:10px;
+text-align:center;
+color:#da2c51;
+font-size:10px;
+letter-spacing:0.3px;
+}
+
+.auth-error.success{
+color:#2cda6e;
+}
+
+.gsi-material-button{
+-moz-user-select:none;
+-webkit-user-select:none;
+-ms-user-select:none;
+-webkit-appearance:none;
+appearance:none;
+background-color:#181a20;
+background-image:none;
+border:1px solid #2b3139;
+border-radius:6px;
+box-sizing:border-box;
+color:#e8eaed;
+cursor:pointer;
+font-family:Roboto,Arial,sans-serif;
+font-size:12px;
+height:36px;
+letter-spacing:0.2px;
+outline:none;
+overflow:hidden;
+padding:0;
+position:relative;
+text-align:center;
+transition:background-color 0.18s ease,border-color 0.18s ease;
+vertical-align:middle;
+white-space:nowrap;
+width:100%;
+margin-top:8px;
+}
+
+.gsi-material-button .gsi-material-button-state{
+transition:opacity 0.18s ease;
+bottom:0;
+left:0;
+opacity:0;
+position:absolute;
+right:0;
+top:0;
+background-color:#fff;
+}
+
+.gsi-material-button:disabled{
+cursor:default;
+background-color:#181a20;
+border-color:#2b3139;
+opacity:0.5;
+}
+
+.gsi-material-button-content-wrapper{
+display:flex;
+align-items:center;
+justify-content:center;
+box-sizing:border-box;
+gap:8px;
+height:100%;
+width:100%;
+padding:0 10px;
+position:relative;
+}
+
+.gsi-material-button-icon{
+height:18px;
+width:18px;
+min-width:18px;
+}
+
+.gsi-material-button-icon svg{
+display:block;
+height:18px;
+width:18px;
+}
+
+.gsi-material-button-contents{
+font-size:11px;
+font-weight:600;
+letter-spacing:0.3px;
+text-transform:none;
+}
+
+.gsi-material-button:hover{
+border-color:#2cda6e;
+background:#181a20;
+}
+
+.gsi-material-button:hover .gsi-material-button-state{
+opacity:0.04;
+}
+
+.gsi-material-button:active .gsi-material-button-state{
+opacity:0.1;
 }
 
 .confirm-screen{
@@ -3675,5 +3832,4 @@ display:-webkit-box;
 -webkit-box-orient:vertical;
 text-overflow:ellipsis;
 }
-
 
