@@ -1,4 +1,4 @@
-const APP_VERSION="1.751"
+const APP_VERSION="1.755"
 const DONATION_ERC20_ADDRESS="0x1E7333A8a912cA3a39Fe3699405AF523Ed2c2058"
 const DONATION_PAYPAL_EMAIL="mellok@ukr.net"
 const DONATION_INSTAGRAM_URL="https://www.instagram.com/sashamell/"
@@ -159,12 +159,13 @@ const I18N={
   statusLoadFailed:"Не вдалося завантажити файл або невірний пароль",
   creatorInfoLabel:"Інформація про автора",
   creatorFirstName:"Olexandr",
-  creatorLastName:"Skorobagako",
+  creatorLastName:"Skorobagatko",
   creatorInstagramLabel:"Instagram",
   creatorSupportMessage:"If you like my product, feel free to donate any amount.",
   creatorCryptoLabel:"ERC-20:",
   creatorPaypalLabel:"PayPal:",
   creatorThanks:"THANK YOU",
+  creatorClose:"ЗАКРИТИ",
   copy:"Копіювати",
   copied:"Скопійовано",
   copyFailed:"Помилка копіювання"
@@ -323,12 +324,13 @@ const I18N={
   statusLoadFailed:"Failed to load file or wrong password",
   creatorInfoLabel:"Creator info",
   creatorFirstName:"Olexandr",
-  creatorLastName:"Skorobagako",
+  creatorLastName:"Skorobagatko",
   creatorInstagramLabel:"Instagram",
   creatorSupportMessage:"If you like my product, feel free to donate any amount.",
   creatorCryptoLabel:"ERC-20:",
   creatorPaypalLabel:"PayPal:",
   creatorThanks:"THANK YOU",
+  creatorClose:"CLOSE",
   copy:"Copy",
   copied:"Copied",
   copyFailed:"Copy failed"
@@ -1344,6 +1346,7 @@ const UNDO_LIMIT=100
 const LOCK_MAX_FAILED_ATTEMPTS=5
 const LOCKOUT_DURATION_MS=5*60*1000
 const ROI_API_REFRESH_MS=15000
+const MOBILE_VIEW_MAX_WIDTH=900
 
 let trades=JSON.parse(localStorage.getItem("tradesV2"))||[]
 let totalHistory=JSON.parse(localStorage.getItem(TOTALS_KEY))||[]
@@ -4756,6 +4759,7 @@ const donationMessageEl=document.getElementById("donationMessage")
 const donationCryptoEl=document.getElementById("donationCrypto")
 const donationPaypalEl=document.getElementById("donationPaypal")
 const donationCloseBtn=document.getElementById("donationCloseBtn")
+const donationDismissBtn=document.getElementById("donationDismissBtn")
 const donationAvatarImg=document.getElementById("donationAvatarImg")
 const donationAvatarFallback=document.getElementById("donationAvatarFallback")
 const pinBtn=document.getElementById("pinBtn")
@@ -4855,7 +4859,7 @@ function applyLanguage(){
  if(loadDataBtn) loadDataBtn.innerText=t("loadData")
  if(saveDataBtn) saveDataBtn.innerText=t("saveData")
  if(creatorInfoBtn){
- creatorInfoBtn.innerText="@created by Skorobagatko Olexander. Ukraine. 2026"
+ creatorInfoBtn.innerText="@created by Olexandr Skorobagatko. Ukraine. 2026"
   creatorInfoBtn.setAttribute("aria-label",t("creatorInfoLabel"))
   creatorInfoBtn.title=t("creatorInfoLabel")
  }
@@ -4879,6 +4883,11 @@ function applyLanguage(){
   donationCloseBtn.innerText=t("creatorThanks")
   donationCloseBtn.setAttribute("aria-label",t("creatorThanks"))
   donationCloseBtn.title=t("creatorThanks")
+ }
+ if(donationDismissBtn){
+  donationDismissBtn.innerText=t("creatorClose")
+  donationDismissBtn.setAttribute("aria-label",t("creatorClose"))
+  donationDismissBtn.title=t("creatorClose")
  }
  if(authTitleEl) authTitleEl.innerText=t("authSignInTitle")
  if(authEmailLabelEl) authEmailLabelEl.innerText=t("authEmailLabel")
@@ -5240,6 +5249,23 @@ function ensurePanelCollapsedBadge(panel){
   labelEl.className="panel-collapsed-label"
   panel.appendChild(labelEl)
  }
+ const panelId=panel.dataset?.dragId || ""
+ const isNotesItem=isNotesPanelId(panelId)
+ const noteIndex=Math.max(0,Number(panel.dataset.noteIndex)||0)
+ const noteLocked=isNotesItem ? !!notesItemLocks[noteIndex] : false
+ panel.classList.toggle("note-locked",noteLocked)
+ iconEl.classList.toggle("is-note-locked",noteLocked)
+ const existingLockEl=iconEl.querySelector(".panel-collapsed-lock")
+ if(noteLocked){
+  if(!existingLockEl){
+   const lockEl=document.createElement("span")
+   lockEl.className="panel-collapsed-lock"
+   lockEl.innerHTML=`<span class="side-menu-note-lock-icon" aria-hidden="true"></span>`
+   iconEl.appendChild(lockEl)
+  }
+ }else if(existingLockEl){
+  existingLockEl.remove()
+ }
  labelEl.textContent=getPanelCollapsedLabel(panel)
 }
 
@@ -5428,6 +5454,74 @@ function syncNotesPanels(targetCount=notesItems.length){
  saveNotesTitles()
  saveNotesItemLocks()
  saveNotesPanelLayouts()
+}
+
+function duplicateNotesPanel(sourcePanel){
+ if(!sourcePanel?.classList?.contains("notes")) return false
+ if(notesItems.length>=MAX_NOTES_PANELS) return false
+ const sourceIndex=Math.max(0,Math.min(notesItems.length-1,Math.floor(Number(sourcePanel.dataset.noteIndex)||0)))
+ if(sourceIndex<0 || sourceIndex>=notesItems.length) return false
+
+ const sourceContent=notesItems[sourceIndex] || ""
+ const sourceLabel=normalizeNoteTitle(noteTitles[sourceIndex]) || getNotesPanelLabel(sourceIndex) || getNotesPanelDefaultLabel(sourceIndex)
+ const copyTitle=normalizeNoteTitle(`${sourceLabel} copy`) || "copy"
+ const isSourceCollapsed=sourcePanel.classList.contains("collapsed")
+ const currentX=parseFloat(sourcePanel.style.left)||sourcePanel.offsetLeft||0
+ const currentY=parseFloat(sourcePanel.style.top)||sourcePanel.offsetTop||0
+ const folderX=parseFloat(sourcePanel.dataset.folderX)
+ const folderY=parseFloat(sourcePanel.dataset.folderY)
+ const expandedX=parseFloat(sourcePanel.dataset.expandedX)
+ const expandedY=parseFloat(sourcePanel.dataset.expandedY)
+ const baseFolderX=Number.isFinite(folderX) ? folderX : currentX
+ const baseFolderY=Number.isFinite(folderY) ? folderY : currentY
+ const baseExpandedX=Number.isFinite(expandedX) ? expandedX : currentX
+ const baseExpandedY=Number.isFinite(expandedY) ? expandedY : currentY
+ const offset=8
+ const nextFolderX=Math.round(baseFolderX+offset)
+ const nextFolderY=Math.round(Math.max(getPanelTopSafeY(),baseFolderY+offset))
+ const nextExpandedX=Math.round(baseExpandedX+offset)
+ const nextExpandedY=Math.round(Math.max(getPanelTopSafeY(),baseExpandedY+offset))
+
+ syncNotesPanels(notesItems.length+1)
+ const nextIndex=Math.max(0,notesItems.length-1)
+ notesItems[nextIndex]=sourceContent
+ noteTitles[nextIndex]=copyTitle
+ notesItemLocks[nextIndex]=false
+
+ const newPanel=getNotesPanels().find(panel=>Math.floor(Number(panel.dataset.noteIndex)||0)===nextIndex)
+ if(!newPanel) return false
+ updateNotesPanelMeta(newPanel,nextIndex)
+ newPanel.dataset.folderX=String(nextFolderX)
+ newPanel.dataset.folderY=String(nextFolderY)
+ newPanel.style.left=`${nextExpandedX}px`
+ newPanel.style.top=`${nextExpandedY}px`
+ const setCollapsedState=newPanel.__setCollapsedState
+ if(isSourceCollapsed){
+  if(typeof setCollapsedState==="function"){
+   setCollapsedState(true)
+  }else{
+   newPanel.classList.add("collapsed")
+   newPanel.style.left=`${nextFolderX}px`
+   newPanel.style.top=`${nextFolderY}px`
+  }
+ }else{
+  if(typeof setCollapsedState==="function"){
+   setCollapsedState(false)
+  }
+  newPanel.style.left=`${nextExpandedX}px`
+  newPanel.style.top=`${nextExpandedY}px`
+ }
+ ensurePanelCollapsedBadge(newPanel)
+ rememberNotesPanelLayout(newPanel)
+ saveNotesItems()
+ saveNotesTitles()
+ saveNotesItemLocks()
+ saveNotesPanelLayouts()
+ setSelectedPanels([newPanel])
+ bringToFront(newPanel)
+ savePositions()
+ renderSideMenuList()
+ return true
 }
 
 function moveArrayItem(list,fromIndex,toIndex){
@@ -5771,6 +5865,7 @@ initWindowScaleShortcut()
 initContextMenuBlock()
 initSaveDataShortcut()
 initCollapseButtons()
+applyMobilePanelsMode()
 initUndoShortcut()
 if(langToggleBtn){
  langToggleBtn.addEventListener("click",()=>{
@@ -5794,6 +5889,7 @@ window.addEventListener("resize",updateTotalsCardHeight)
 window.addEventListener("resize",updateClockCardHeight)
 window.addEventListener("resize",updateDayTabsNavigation)
 window.addEventListener("resize",()=>getNotesPanels().forEach(updateNotesToolbarNavigation))
+window.addEventListener("resize",applyMobilePanelsMode)
 lastCommittedState=serializeAppState()
 restoreUndoHistoryFromStorage()
 persistUndoHistory()
@@ -5805,6 +5901,29 @@ function hasAnySavedPosition(){
  }catch{
   return false
  }
+}
+
+function isMobileViewportMode(){
+ return window.innerWidth<=MOBILE_VIEW_MAX_WIDTH
+}
+
+function applyMobilePanelsMode(){
+ if(!isMobileViewportMode()) return
+ refreshDraggables().forEach(panel=>{
+  if(!panel.classList.contains("collapsed")) return
+  const setCollapsedState=panel.__setCollapsedState
+  if(typeof setCollapsedState==="function"){
+   setCollapsedState(false)
+   return
+  }
+  panel.classList.remove("collapsed")
+ })
+ refreshPanelCollapsedBadges()
+ updateTrackerCardHeight()
+ updateMarginCardHeight()
+ updateTotalsCardHeight()
+ updateClockCardHeight()
+ renderPnlCalendar()
 }
 
 function getPanelTopSafeY(){
@@ -6078,7 +6197,8 @@ function initPanelSelection(){
  if(!layoutEl || !panelSelectionBox) return
 
 document.addEventListener("pointerdown",(e)=>{
-if(e.button!==0) return
+ if(e.button!==0) return
+  if(isMobileViewportMode()) return
   if(isLocked || isResetConfirmOpen || isDonationScreenOpen || isAuthScreenOpen || spaceDragMode) return
   if(sideMenu?.classList.contains("open")) return
   if(!isPanelSelectionBackgroundTarget(e.target)) return
@@ -6164,7 +6284,25 @@ function enableDrag(el){
  }
 
 el.addEventListener("pointerdown",(e)=>{
+ if(isMobileViewportMode()) return
  const target=e.target
+ if(
+  e.button===0 &&
+  e.altKey &&
+  !e.ctrlKey &&
+  !e.metaKey &&
+  !e.shiftKey &&
+  el.classList.contains("notes") &&
+  el.classList.contains("collapsed") &&
+  target?.closest?.(".panel-collapsed-icon")
+ ){
+  e.preventDefault()
+  e.stopPropagation()
+  commitUndoableChange(()=>{
+   duplicateNotesPanel(el)
+  })
+  return
+ }
  if(target?.closest?.(DRAG_INTERACTIVE_SELECTOR)) return
  if(el.classList.contains("collapsed") && !target?.closest?.(".panel-collapsed-icon")) return
  if(target?.isContentEditable || target?.closest?.('[contenteditable="true"]')) return
@@ -6478,6 +6616,7 @@ function toggleNoteDeleteLock(noteIndex){
  if(index<0 || index>=notesItems.length) return
  notesItemLocks[index]=!notesItemLocks[index]
  saveNotesItemLocks()
+ refreshPanelCollapsedBadges()
  renderSideMenuList()
 }
 
@@ -6815,6 +6954,12 @@ if(resetConfirmScreen){
 
 if(donationCloseBtn){
  donationCloseBtn.addEventListener("click",()=>{
+  setDonationScreenOpen(false)
+ })
+}
+
+if(donationDismissBtn){
+ donationDismissBtn.addEventListener("click",()=>{
   setDonationScreenOpen(false)
  })
 }
