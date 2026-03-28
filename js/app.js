@@ -1,4 +1,4 @@
-const APP_VERSION="1.755"
+const APP_VERSION="1.803"
 const DONATION_ERC20_ADDRESS="0x1E7333A8a912cA3a39Fe3699405AF523Ed2c2058"
 const DONATION_PAYPAL_EMAIL="mellok@ukr.net"
 const DONATION_INSTAGRAM_URL="https://www.instagram.com/sashamell/"
@@ -1347,6 +1347,16 @@ const LOCK_MAX_FAILED_ATTEMPTS=5
 const LOCKOUT_DURATION_MS=5*60*1000
 const ROI_API_REFRESH_MS=15000
 const MOBILE_VIEW_MAX_WIDTH=900
+const MOBILE_PANEL_ORDER=["tracker","totals","chart","calendar","margin","clocks","notes"]
+const MOBILE_PANEL_LABEL_KEYS={
+ tracker:"panelTracker",
+ totals:"panelTotals",
+ chart:"panelChart",
+ calendar:"panelCalendar",
+ margin:"panelMargin",
+ clocks:"panelClocks",
+ notes:"notesGroup"
+}
 
 let trades=JSON.parse(localStorage.getItem("tradesV2"))||[]
 let totalHistory=JSON.parse(localStorage.getItem(TOTALS_KEY))||[]
@@ -4720,6 +4730,8 @@ const saveDataBtn=document.getElementById("saveDataBtn")
 const loadDataInput=document.getElementById("loadDataInput")
 const sideMenuStatus=document.getElementById("sideMenuStatus")
 const creatorInfoBtn=document.getElementById("creatorInfoBtn")
+const mobileBottomNavEl=document.getElementById("mobileBottomNav")
+const mobileBottomNavButtons=[...document.querySelectorAll("[data-mobile-panel]")]
 const googleAuthBtn=document.getElementById("googleAuthBtn")
 const cloudSyncBtn=document.getElementById("cloudSyncBtn")
 const cloudAuthStatusEl=document.getElementById("cloudAuthStatus")
@@ -4792,6 +4804,9 @@ let sideMenuHoverTimer=null
 let sideMenuCloseTimer=null
 let statusToastTimer=null
 let welcomeSplashTimer=null
+let isMobileUiActive=false
+let mobileActivePanelKey="tracker"
+let mobileDesktopLayoutSnapshot=null
 let windowsScale=clampWindowScale(parseFloat(localStorage.getItem(WINDOW_SCALE_KEY) || String(DEFAULT_WINDOW_SCALE)))
 let notesSpellcheckEnabled=localStorage.getItem(NOTES_SPELLCHECK_KEY)!=="0"
 let isLocked=false
@@ -5030,7 +5045,9 @@ if(dayTabsNextBtn){
  renderTotalHistory()
  buildRows()
  updateTotals()
+ updateMobileBottomNavLanguage()
  renderSideMenuList()
+ applyMobileActivePanel()
  applyLowercaseButtonTooltips()
 }
 
@@ -5054,6 +5071,152 @@ function refreshDraggables(){
  refreshPanelCollapsedBadges()
  pruneSelectedPanels()
  return draggables
+}
+
+function getPrimaryNotesPanel(){
+ return getNotesPanels()[0] || null
+}
+
+function getMobilePanelByKey(key){
+ if(key==="notes") return getPrimaryNotesPanel()
+ return getPanels().find(panel=>panel.dataset.dragId===key) || null
+}
+
+function getDefaultMobilePanelKey(){
+ for(const key of MOBILE_PANEL_ORDER){
+  if(getMobilePanelByKey(key)) return key
+ }
+ return "tracker"
+}
+
+function updateMobileBottomNavLanguage(){
+ if(!mobileBottomNavButtons.length) return
+ mobileBottomNavButtons.forEach(btn=>{
+  const key=btn.dataset.mobilePanel
+  const labelKey=MOBILE_PANEL_LABEL_KEYS[key]
+  const label=labelKey ? t(labelKey) : key
+  btn.textContent=String(label || key).toLowerCase()
+  btn.setAttribute("aria-label",label)
+  btn.title=label
+ })
+}
+
+function updateMobileBottomNavActiveState(activeKey){
+ if(!mobileBottomNavButtons.length) return
+ mobileBottomNavButtons.forEach(btn=>{
+  const isActive=btn.dataset.mobilePanel===activeKey
+  btn.classList.toggle("is-active",isActive)
+ })
+}
+
+function captureDesktopLayoutSnapshot(){
+ const panelStates={}
+ getPanels().forEach(panel=>{
+  const id=panel.dataset.dragId
+  if(!id) return
+  panelStates[id]={
+   left:panel.style.left || "",
+   top:panel.style.top || "",
+   width:panel.style.width || "",
+   height:panel.style.height || "",
+   minHeight:panel.style.minHeight || "",
+   zIndex:panel.style.zIndex || "",
+   collapsed:panel.classList.contains("collapsed"),
+   hidden:panel.classList.contains("panel-hidden"),
+   expandedX:panel.dataset.expandedX || "",
+   expandedY:panel.dataset.expandedY || "",
+   folderX:panel.dataset.folderX || "",
+   folderY:panel.dataset.folderY || "",
+   notesExpandedHeight:panel.dataset.notesExpandedHeight || "",
+   notesExpandedMinHeight:panel.dataset.notesExpandedMinHeight || ""
+  }
+ })
+ return {
+  panelStates,
+  selectedPanelIds:[...selectedPanelIds]
+ }
+}
+
+function restoreDesktopLayoutSnapshot(snapshot){
+ if(!snapshot?.panelStates) return
+ const restoreDatasetValue=(panel,key,value)=>{
+  if(value===undefined || value===null || value===""){
+   delete panel.dataset[key]
+   return
+  }
+  panel.dataset[key]=String(value)
+ }
+ getPanels().forEach(panel=>{
+  const id=panel.dataset.dragId
+  const state=snapshot.panelStates[id]
+  panel.classList.remove("mobile-panel-hidden")
+  if(!state) return
+  panel.style.left=state.left || ""
+  panel.style.top=state.top || ""
+  panel.style.width=state.width || ""
+  panel.style.height=state.height || ""
+  panel.style.minHeight=state.minHeight || ""
+  panel.style.zIndex=state.zIndex || ""
+  panel.classList.toggle("collapsed",!!state.collapsed)
+  panel.classList.toggle("panel-hidden",!!state.hidden)
+  restoreDatasetValue(panel,"expandedX",state.expandedX)
+  restoreDatasetValue(panel,"expandedY",state.expandedY)
+  restoreDatasetValue(panel,"folderX",state.folderX)
+  restoreDatasetValue(panel,"folderY",state.folderY)
+  restoreDatasetValue(panel,"notesExpandedHeight",state.notesExpandedHeight)
+  restoreDatasetValue(panel,"notesExpandedMinHeight",state.notesExpandedMinHeight)
+ })
+ selectedPanelIds=new Set(Array.isArray(snapshot.selectedPanelIds) ? snapshot.selectedPanelIds : [])
+ pruneSelectedPanels()
+ syncPanelSelectionClasses()
+}
+
+function applyMobileActivePanel(){
+ if(!isMobileUiActive) return
+ let activeKey=MOBILE_PANEL_ORDER.includes(mobileActivePanelKey) ? mobileActivePanelKey : getDefaultMobilePanelKey()
+ let activePanel=getMobilePanelByKey(activeKey)
+ if(!activePanel){
+  activeKey=getDefaultMobilePanelKey()
+  activePanel=getMobilePanelByKey(activeKey)
+ }
+ mobileActivePanelKey=activeKey
+ getPanels().forEach(panel=>{
+  panel.classList.remove("panel-hidden")
+  if(panel.classList.contains("collapsed")){
+   const setCollapsedState=panel.__setCollapsedState
+   if(typeof setCollapsedState==="function"){
+    setCollapsedState(false)
+   }else{
+    panel.classList.remove("collapsed")
+   }
+  }
+  const shouldShow=panel===activePanel
+  panel.classList.toggle("mobile-panel-hidden",!shouldShow)
+ })
+ updateMobileBottomNavActiveState(activeKey)
+}
+
+function setMobileActivePanel(nextKey){
+ mobileActivePanelKey=MOBILE_PANEL_ORDER.includes(nextKey) ? nextKey : getDefaultMobilePanelKey()
+ applyMobileActivePanel()
+ updateTrackerCardHeight()
+ updateMarginCardHeight()
+ updateTotalsCardHeight()
+ updateClockCardHeight()
+ renderPnlCalendar()
+}
+
+function initMobileBottomNav(){
+ if(!mobileBottomNavButtons.length) return
+ mobileBottomNavButtons.forEach(btn=>{
+  if(btn.dataset.mobileReady==="1") return
+  btn.dataset.mobileReady="1"
+  btn.addEventListener("click",()=>{
+   if(!isMobileViewportMode()) return
+   setMobileActivePanel(btn.dataset.mobilePanel || "tracker")
+  })
+ })
+ updateMobileBottomNavLanguage()
 }
 
 function syncSideMenuSelectionState(){
@@ -5865,6 +6028,7 @@ initWindowScaleShortcut()
 initContextMenuBlock()
 initSaveDataShortcut()
 initCollapseButtons()
+initMobileBottomNav()
 applyMobilePanelsMode()
 initUndoShortcut()
 if(langToggleBtn){
@@ -5908,17 +6072,27 @@ function isMobileViewportMode(){
 }
 
 function applyMobilePanelsMode(){
- if(!isMobileViewportMode()) return
- refreshDraggables().forEach(panel=>{
-  if(!panel.classList.contains("collapsed")) return
-  const setCollapsedState=panel.__setCollapsedState
-  if(typeof setCollapsedState==="function"){
-   setCollapsedState(false)
-   return
+ const isMobile=isMobileViewportMode()
+ if(isMobile){
+  if(!isMobileUiActive){
+   mobileDesktopLayoutSnapshot=captureDesktopLayoutSnapshot()
+   isMobileUiActive=true
+   document.body.classList.add("mobile-app-mode")
+   clearSelectedPanels()
   }
-  panel.classList.remove("collapsed")
- })
+  if(sideMenu) sideMenu.classList.remove("open")
+  if(sideMenuOverlay) sideMenuOverlay.classList.remove("open")
+  setMobileActivePanel(mobileActivePanelKey || getDefaultMobilePanelKey())
+  refreshPanelCollapsedBadges()
+  return
+ }
+ if(!isMobileUiActive) return
+ document.body.classList.remove("mobile-app-mode")
+ restoreDesktopLayoutSnapshot(mobileDesktopLayoutSnapshot)
+ mobileDesktopLayoutSnapshot=null
+ isMobileUiActive=false
  refreshPanelCollapsedBadges()
+ renderSideMenuList()
  updateTrackerCardHeight()
  updateMarginCardHeight()
  updateTotalsCardHeight()
@@ -6560,9 +6734,12 @@ const notesItemsHtml=notesPanels.map(renderPanelItem).join("")
     notesGroupEl.classList.remove("is-opening")
    })
   }
-  shouldAnimateNotesGroupOpen=false
+ shouldAnimateNotesGroupOpen=false
  }
  updateEmptyAsciiArt()
+ if(isMobileUiActive){
+  applyMobileActivePanel()
+ }
 }
 
 function updateEmptyAsciiArt(){
@@ -6633,6 +6810,11 @@ function setChartViewMode(mode){
 
 function setSideMenuOpen(isOpen){
  if(!sideMenu || !sideMenuOverlay) return
+ if(isMobileViewportMode()){
+  sideMenu.classList.remove("open")
+  sideMenuOverlay.classList.remove("open")
+  return
+ }
  if(sideMenuHoverTimer){
   clearTimeout(sideMenuHoverTimer)
   sideMenuHoverTimer=null
@@ -8701,6 +8883,7 @@ function bindPanelHideButton(btn){
  if(!btn || btn.dataset.hideReady==="1") return
  btn.dataset.hideReady="1"
  btn.addEventListener("click",()=>{
+  if(isMobileViewportMode()) return
   const panel=btn.closest(PANEL_HIDE_SELECTOR)
   if(!panel) return
   commitUndoableChange(()=>{
@@ -8750,6 +8933,7 @@ function initUndoShortcut(){
  if(isDonationScreenOpen) return
   if(isAuthScreenOpen) return
   if(isLocked && e.code!=="Escape") return
+  if(isMobileViewportMode() && e.code==="Delete") return
   if(e.code==="Delete"){
    if(isTypingTarget(e.target)) return
    const selectedPanels=getSelectedPanels().filter(canHidePanel)
@@ -8911,6 +9095,7 @@ function initKeyboardPanelNudge(){
 
 document.addEventListener("keydown",(e)=>{
 if(!ARROW_KEYS.has(e.key)) return
+  if(isMobileViewportMode()) return
   if(isLocked || isResetConfirmOpen || isDonationScreenOpen || isAuthScreenOpen || isPinned) return
  if(e.ctrlKey || e.metaKey || e.altKey) return
   if(isTypingTarget(e.target)) return
@@ -9062,6 +9247,7 @@ function bindCollapseButton(btn){
 
  panel.__setCollapsedState=togglePanelCollapsed
  btn.addEventListener("click",()=>{
+  if(isMobileViewportMode()) return
   commitUndoableChange(()=>{
    const selectedPanels=isPanelSelected(panel) ? getSelectedPanels(panel) : []
    const targets=selectedPanels.length ? selectedPanels : [panel]
@@ -9078,6 +9264,7 @@ function bindCollapseButton(btn){
 if(panel.dataset.collapseDblReady!=="1"){
   panel.dataset.collapseDblReady="1"
 panel.addEventListener("dblclick",(e)=>{
+  if(isMobileViewportMode()) return
   if(isLocked || isResetConfirmOpen || isDonationScreenOpen || isAuthScreenOpen) return
   if(!panel.classList.contains("collapsed")) return
   const iconEl=panel.querySelector(".panel-collapsed-icon")
@@ -9118,6 +9305,7 @@ function initCollapseButtons(){
  document.querySelectorAll("[data-collapse-btn]").forEach(btn=>bindCollapseButton(btn))
 }
 function savePositions(options={}){
+ if(isMobileUiActive || isMobileViewportMode()) return
  const markLayoutEdited=options.markLayoutEdited!==false
  const data={}
  draggables.forEach(el=>{
