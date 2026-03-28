@@ -3,7 +3,7 @@
 A free, browser-based trading tool — no installation, no backend, no subscription.  
 Works offline. Optionally syncs to the cloud via Firebase.
 
-**[▶ Live Demo](weekly-trade-tracker.web.app)**
+**[▶ Live Demo](https://weekly-trade-tracker.web.app/)**
 
 ---
 
@@ -28,7 +28,7 @@ Works offline. Optionally syncs to the cloud via Firebase.
 ## 🚀 Quick Start
 
 ### Option A — Use online
-Visit **[mellokone.github.io/wtt](weekly-trade-tracker.web.app)**
+Visit **[mellokone.github.io/wtt](https://weekly-trade-tracker.web.app/)**
 
 ### Option B — Run locally
 ```
